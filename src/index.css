@@ -59,23 +59,26 @@
   animation: shimmer 1.8s infinite;
 }
 
-/* Print Styles for Registration Pass / Ticket */
+/* Print Styles for Registration Pass / Receipt */
 @media print {
   body * {
     visibility: hidden;
   }
-  #printable-pass, #printable-pass * {
+  #printable-pass, #printable-pass *,
+  #printable-receipt, #printable-receipt * {
     visibility: visible;
   }
-  #printable-pass {
+  #printable-pass, #printable-receipt {
     position: absolute;
     left: 0;
     top: 0;
     width: 100%;
     margin: 0;
-    padding: 20px;
+    padding: 16px;
     box-shadow: none;
-    border: 1px solid #ccc;
+    border: 1px solid #cbd5e1;
+    background: #ffffff !important;
+    color: #0f172a !important;
   }
   .no-print {
     display: none !important;

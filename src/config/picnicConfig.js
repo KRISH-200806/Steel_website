@@ -3,12 +3,12 @@
 
 export const DEFAULT_CONFIG = {
   // Event Details
-  eventName: "Annual Sunshine 1-Day Picnic 2026",
-  eventTagline: "A Day of Fun, Adventure, Delicious Food & Cherished Memories!",
-  eventDate: "Sunday, 29 March 2026",
-  eventTime: "7:00 AM to 6:30 PM",
-  eventVenue: "Green Valley Eco Resort & Water Park, Lonavala Highway",
-  reportingPoint: "Central Assembly Point, Near City Hall (Bus departs at 7:15 AM sharp)",
+  eventName: "૧-દિવસીય વાર્ષિક પિકનિક ૨૦૨૬",
+  eventTagline: "આનંદ, ઉલ્લાસ અને ભોજન સાથે યાદગાર પિકનિક",
+  eventDate: "૨૦૨૬",
+  eventTime: "સવારે ૭:૦૦ થી",
+  eventVenue: "રિસોર્ટ",
+  reportingPoint: "જોથાણ",
   
   // Pricing Configuration (Set to ₹100 per member)
   feePerMember: 100, // INR per member (₹100)
