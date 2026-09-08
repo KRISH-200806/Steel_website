@@ -318,7 +318,7 @@ export const exportToCSV = (registrations) => {
   const csvContent = "data:text/csv;charset=utf-8,\uFEFF" + encodeURIComponent(csvRows.join("\n"));
   const link = document.createElement("a");
   link.setAttribute("href", csvContent);
-  link.setAttribute("download", `Picnic_2026_Registrations_${new Date().toISOString().slice(0, 10)}.csv`);
+  link.setAttribute("download", `Satsang_Yatra_2026_Registrations_${new Date().toISOString().slice(0, 10)}.csv`);
   document.body.appendChild(link);
   link.click();
   document.body.removeChild(link);
@@ -358,9 +358,9 @@ export const exportToExcelFormatted = (registrations) => {
       </style>
     </head>
     <body>
-      <h2>1-Day Picnic 2026 - Registration Records</h2>
+      <h2>Shri Brahmanand Satsang Yatra 2026 - Registration Records</h2>
       <p>Generated on: ${new Date().toLocaleString('en-IN')}</p>
-      <p>Fee Policy: Above 5 Years = ₹100 | Age 5 & Under = Free (₹0)</p>
+      <p>Fee Policy: Above 5 Years = ₹100 | Age 5 & Under = Free (₹0) | Bus Fare = ₹200/person</p>
       <table>
         <thead>
           <tr>

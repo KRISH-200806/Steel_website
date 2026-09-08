@@ -32,8 +32,8 @@ export default {
         }
       },
       fontFamily: {
-        sans: ['Plus Jakarta Sans', 'Inter', 'system-ui', 'sans-serif'],
-        display: ['Outfit', 'Plus Jakarta Sans', 'system-ui', 'sans-serif'],
+        sans: ['Noto Sans Gujarati', 'Plus Jakarta Sans', 'Inter', 'system-ui', 'sans-serif'],
+        display: ['Noto Sans Gujarati', 'Outfit', 'Plus Jakarta Sans', 'system-ui', 'sans-serif'],
       },
       boxShadow: {
         'glass': '0 8px 32px 0 rgba(31, 38, 135, 0.08)',

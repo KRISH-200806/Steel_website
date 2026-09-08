@@ -1,18 +1,48 @@
 import React, { useEffect, useRef } from 'react';
 import QRCode from 'qrcode';
-import { Palmtree, Printer, CheckCircle2, Bus, Car } from 'lucide-react';
+import { Printer, CheckCircle2, Bus, Car } from 'lucide-react';
 
-export const RegistrationPass = ({ registrationData, config, onClose }) => {
+export const RegistrationPass = ({ registrationData, config = {}, onClose }) => {
   const qrRef = useRef(null);
+
+  const primaryName = (registrationData.primaryName || '').trim();
+  const primaryAge = registrationData.primaryAge || '';
+  const primaryGender = registrationData.primaryGender || '';
+  const mobileNumber = registrationData.mobileNumber || '';
+  const transportMode = registrationData.transportMode || 'Bus (Jothan)';
+  const isBus = transportMode.includes('Bus');
+  const busFare = config.busFare || 200;
+
+  // Build unified member list ensuring primary person is member 1
+  const rawMembers = registrationData.members || [];
+  let allMembers = [];
+
+  if (rawMembers.length > 0) {
+    const firstMemberMatchesPrimary = primaryName && rawMembers[0]?.name?.trim().toLowerCase() === primaryName.toLowerCase();
+    if (firstMemberMatchesPrimary) {
+      allMembers = rawMembers.map((m, idx) => ({ ...m, isPrimary: idx === 0 }));
+    } else if (primaryName) {
+      allMembers = [
+        { name: primaryName, age: primaryAge, gender: primaryGender, isPrimary: true },
+        ...rawMembers.map(m => ({ ...m, isPrimary: false }))
+      ];
+    } else {
+      allMembers = rawMembers.map((m, idx) => ({ ...m, isPrimary: idx === 0 }));
+    }
+  } else if (primaryName) {
+    allMembers = [{ name: primaryName, age: primaryAge, gender: primaryGender, isPrimary: true }];
+  }
+
+  const memberCount = allMembers.length || 1;
 
   useEffect(() => {
     if (qrRef.current && registrationData) {
       const passInfo = JSON.stringify({
         id: registrationData.registrationId,
-        lead: registrationData.primaryName,
-        phone: registrationData.mobileNumber,
-        transport: registrationData.transportMode || 'Bus (Jothan)',
-        members: registrationData.members?.length || registrationData.totalMembers || 1
+        lead: primaryName,
+        phone: mobileNumber,
+        transport: transportMode,
+        members: memberCount
       });
 
       QRCode.toCanvas(qrRef.current, passInfo, {
@@ -24,15 +54,11 @@ export const RegistrationPass = ({ registrationData, config, onClose }) => {
         }
       });
     }
-  }, [registrationData]);
+  }, [registrationData, primaryName, mobileNumber, transportMode, memberCount]);
 
   const handlePrint = () => {
     window.print();
   };
-
-  const members = registrationData.members || [];
-  const memberCount = registrationData.totalMembers || members.length || 1;
-  const isBus = (registrationData.transportMode || '').includes('Bus');
 
   return (
     <div className="fixed inset-0 z-[9999] bg-slate-950/85 backdrop-blur-md overflow-y-auto p-3 sm:p-6 flex justify-center items-start">
@@ -41,20 +67,20 @@ export const RegistrationPass = ({ registrationData, config, onClose }) => {
         {/* Top Control Bar (Hidden on Print) */}
         <div className="no-print bg-slate-100 px-6 py-3.5 flex items-center justify-between border-b border-slate-200">
           <span className="font-bold text-slate-700 text-sm flex items-center gap-1.5">
-            <Palmtree className="w-4 h-4 text-emerald-600" />
+            <span className="text-base">🛕</span>
             <span>ડિજિટલ એન્ટ્રી પાસ</span>
           </span>
           <div className="flex items-center gap-2">
             <button
               onClick={handlePrint}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition-all shadow-sm"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition-all shadow-sm cursor-pointer"
             >
               <Printer className="w-3.5 h-3.5" />
               <span>પ્રિન્ટ / PDF સેવ કરો</span>
             </button>
             <button
               onClick={onClose}
-              className="px-3 py-1.5 rounded-xl bg-white hover:bg-slate-200 text-slate-700 text-xs font-bold border border-slate-200 transition-all"
+              className="px-3 py-1.5 rounded-xl bg-white hover:bg-slate-200 text-slate-700 text-xs font-bold border border-slate-200 transition-all cursor-pointer"
             >
               બંધ કરો
             </button>
@@ -72,17 +98,17 @@ export const RegistrationPass = ({ registrationData, config, onClose }) => {
                   ઓફિશિયલ એન્ટ્રી પાસ
                 </span>
                 <h2 className="text-xl sm:text-2xl font-black font-display tracking-tight text-white mt-1">
-                  {config.eventName || "૧-દિવસીય પિકનિક ૨૦૨૬"}
+                  {config.eventName || "શ્રી બ્રહ્માનંદ સત્સંગ યાત્રા - 2026"}
                 </h2>
                 <p className="text-xs text-emerald-200 mt-0.5">
-                  {config.eventTagline || "આનંદ, ઉલ્લાસ અને યાદગાર પળો સાથેની પિકનિક"}
+                  {config.eventTagline || "ભગવાનના સાનિધ્યમાં આનંદની 1 દિવસીય સત્સંગ યાત્રા"}
                 </p>
               </div>
 
               <div className="bg-white/10 backdrop-blur-md rounded-xl p-2.5 text-center border border-white/20 flex-shrink-0">
                 <span className="block text-[10px] text-emerald-200 font-semibold">પાસ નંબર</span>
                 <span className="text-xs sm:text-sm font-extrabold text-amber-300 font-mono">
-                  {registrationData.registrationId}
+                  {registrationData.registrationId || "SBSY-2026-0001"}
                 </span>
               </div>
             </div>
@@ -92,7 +118,7 @@ export const RegistrationPass = ({ registrationData, config, onClose }) => {
           <div className="grid grid-cols-3 gap-2 bg-slate-50 p-3 rounded-2xl border border-slate-200 text-center mb-6">
             <div>
               <p className="text-[10px] text-slate-400 font-bold uppercase">તારીખ</p>
-              <p className="text-xs font-bold text-slate-800">{config.eventDate || "રવિવાર"}</p>
+              <p className="text-xs font-bold text-slate-800">{config.eventDate || "૨૦૨૬"}</p>
             </div>
             <div className="border-x border-slate-200">
               <p className="text-[10px] text-slate-400 font-bold uppercase">સમય</p>
@@ -101,7 +127,7 @@ export const RegistrationPass = ({ registrationData, config, onClose }) => {
             <div>
               <p className="text-[10px] text-slate-400 font-bold uppercase">સ્થળ</p>
               <p className="text-xs font-bold text-slate-800 truncate" title={config.eventVenue}>
-                {config.eventVenue || "રિસોર્ટ"}
+                {config.eventVenue || "સત્સંગ યાત્રા સ્થળ"}
               </p>
             </div>
           </div>
@@ -112,12 +138,16 @@ export const RegistrationPass = ({ registrationData, config, onClose }) => {
               <div>
                 <span className="text-slate-400 block text-[11px] font-semibold">મુખ્ય સંપર્ક વ્યક્તિ:</span>
                 <span className="font-extrabold text-slate-900 text-base">
-                  {registrationData.primaryName}
-                  {registrationData.primaryAge && <span className="text-xs font-normal text-slate-500 ml-1">({registrationData.primaryAge} વર્ષ, {registrationData.primaryGender === 'Male' ? 'પુરુષ' : registrationData.primaryGender === 'Female' ? 'સ્ત્રી' : 'અન્ય'})</span>}
+                  {primaryName}
+                  {primaryAge && (
+                    <span className="text-xs font-normal text-slate-500 ml-1">
+                      ({primaryAge} વર્ષ, {primaryGender === 'Male' ? 'પુરુષ' : primaryGender === 'Female' ? 'સ્ત્રી' : 'અન્ય'})
+                    </span>
+                  )}
                 </span>
               </div>
               <div className="flex items-center gap-3 text-slate-600">
-                <span>મોબાઈલ: <strong>+91 {registrationData.mobileNumber}</strong></span>
+                <span>મોબાઈલ: <strong>+91 {mobileNumber}</strong></span>
                 <span>•</span>
                 <span>સભ્યો: <strong>{memberCount} વ્યક્તિ</strong></span>
               </div>
@@ -128,12 +158,12 @@ export const RegistrationPass = ({ registrationData, config, onClose }) => {
                   isBus ? 'bg-blue-50 border border-blue-200 text-blue-900' : 'bg-purple-50 border border-purple-200 text-purple-900'
                 }`}>
                   {isBus ? <Bus className="w-3.5 h-3.5 text-blue-600" /> : <Car className="w-3.5 h-3.5 text-purple-600" />}
-                  <span>{isBus ? 'વાહન: બસમાં (જોથાણથી બસ)' : 'વાહન: પોતાનું વાહન'}</span>
+                  <span>{isBus ? `વાહન: બસમાં (બસભાડુ: ₹${busFare}/- પ્રતિ વ્યક્તિ)` : 'વાહન: પોતાનું વાહન'}</span>
                 </span>
 
                 <div className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-900 text-xs font-bold">
                   <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
-                  <span>કન્ફર્મ પાસ</span>
+                  <span>નોંધણી કન્ફર્મ</span>
                 </div>
               </div>
             </div>
@@ -151,25 +181,27 @@ export const RegistrationPass = ({ registrationData, config, onClose }) => {
               નોંધાયેલા ગ્રૂપના સભ્યોની યાદી ({memberCount}):
             </h4>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
-              {members.map((m, i) => (
+              {allMembers.map((m, i) => (
                 <div key={i} className="flex items-center justify-between p-2 rounded-xl bg-slate-50 border border-slate-100">
                   <span className="font-semibold text-slate-800 truncate">
-                    {i + 1}. {m.name || `સભ્ય ${i + 1}`}
+                    {i + 1}. {m.name || `સભ્ય ${i + 1}`} {m.isPrimary && '(મુખ્ય)'}
                   </span>
                   <span className="text-slate-500 text-[11px] flex-shrink-0">
-                    {m.age} વર્ષ • {m.gender === 'Male' ? 'પુરુષ' : m.gender === 'Female' ? 'સ્ત્રી' : 'અન્ય'}
+                    {m.age ? `${m.age} વર્ષ` : ''} • {m.gender === 'Male' ? 'પુરુષ' : m.gender === 'Female' ? 'સ્ત્રી' : (m.gender === 'Other' ? 'અન્ય' : '')}
                   </span>
                 </div>
               ))}
             </div>
           </div>
 
-          {/* Important Assembly & Reporting Point Note */}
-          <div className="p-3.5 bg-emerald-50 rounded-2xl border border-emerald-200 text-emerald-950 text-[11px] leading-relaxed">
-            <p className="font-bold mb-0.5">📍 સૂચના અને ઉપડવાનું સ્થળ:</p>
-            <p>{config.reportingPoint || "બસ ઉપડવાનું સ્થળ: જોથાણ (સમયસર પહોંચવું)"}</p>
-            <p className="mt-1 text-slate-500">
-              {isBus ? "જોથાણથી બસ સમયસર ઉપડશે. બસમાં બેસતી વખતે આ ડિજિટલ પાસ ફોનમાં રાખવો." : "તમારા પોતાના વાહન સાથે સમયસર પિકનિક સ્થળ પર પહોંચી જવું."}
+          {/* Important Notice Box */}
+          <div className="p-3.5 bg-amber-50 rounded-2xl border border-amber-300 text-amber-950 text-[11px] leading-relaxed mb-4">
+            <p className="font-bold mb-0.5">📌 અગત્યની સૂચનાઓ:</p>
+            <p className="font-bold text-rose-700">૧. રસીદના રૂપિયા જમા થયા વગર તે રસીદનું કન્ફર્મેશન કરવામાં આવશે નહીં. તેની સૌએ ખાસ નોંધ લેવી.</p>
+            <p className="mt-0.5">૨. નાના બાળકોની જવાબદારી તેના માતા - પિતાની રહેશે.</p>
+            <p className="mt-0.5">૩. જોથાણ થી બસની વ્યવસ્થા કરેલી છે, તેમાં બસભાડુ - ₹૨૦૦/- પ્રતિ વ્યક્તિ રહેશે.</p>
+            <p className="mt-1 text-slate-700 font-medium">
+              👉 તા. 16-09-2026 પહેલાં રસીદના રૂપિયા અલ્પેશભાઈ વેગડ પાસે જમા કરાવી દેવા (મો. 76003 12101).
             </p>
           </div>
 
@@ -178,7 +210,7 @@ export const RegistrationPass = ({ registrationData, config, onClose }) => {
         {/* Footer info */}
         <div className="no-print bg-slate-50 px-6 py-4 border-t border-slate-200 text-center">
           <p className="text-xs text-slate-500 font-medium">
-            કોઈપણ પ્રશ્ન કે મુશ્કેલી માટે પિકનિક કમિટીનો સંપર્ક કરવો.
+            કોઈપણ પ્રશ્ન કે મુશ્કેલી માટે શ્રી બ્રહ્માનંદ સત્સંગ યાત્રા કમિટીનો સંપર્ક કરવો.
           </p>
         </div>
 

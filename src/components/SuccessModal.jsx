@@ -9,17 +9,19 @@ import {
   Copy, 
   Check, 
   Bus, 
-  Car,
-  Eye,
-  ShieldCheck,
-  Loader2
+  Car, 
+  Eye, 
+  ShieldCheck, 
+  Loader2,
+  AlertTriangle,
+  PhoneCall
 } from 'lucide-react';
 import { RegistrationReceipt } from './RegistrationReceipt';
 
 export const SuccessModal = ({
   result,
   formData,
-  config,
+  config = {},
   onReset
 }) => {
   const [showReceipt, setShowReceipt] = useState(false);
@@ -64,24 +66,64 @@ export const SuccessModal = ({
     }
   };
 
-  const members = formData.members || [];
-  const memberCount = members.length || result?.totalMembers || 1;
+  const primaryName = (formData.primaryName || '').trim();
+  const primaryAge = formData.primaryAge || '';
+  const primaryGender = formData.primaryGender || '';
+  const mobileNumber = formData.mobileNumber || '';
   const transportMode = formData.transportMode || result?.transportMode || 'Bus (Jothan)';
   const isBus = transportMode.includes('Bus');
   const pricePerMember = config.feePerMember || 100;
+  const busFare = config.busFare || 200;
+
+  // Build unified member list ensuring primary person is ALWAYS listed and counted in the table
+  const rawMembers = formData.members || [];
+  let allMembers = [];
+
+  if (rawMembers.length > 0) {
+    const firstMemberMatchesPrimary = primaryName && rawMembers[0]?.name?.trim().toLowerCase() === primaryName.toLowerCase();
+    if (firstMemberMatchesPrimary) {
+      allMembers = rawMembers.map((m, idx) => ({
+        ...m,
+        isPrimary: idx === 0
+      }));
+    } else if (primaryName) {
+      allMembers = [
+        {
+          name: primaryName,
+          age: primaryAge,
+          gender: primaryGender,
+          isPrimary: true
+        },
+        ...rawMembers.map(m => ({ ...m, isPrimary: false }))
+      ];
+    } else {
+      allMembers = rawMembers.map((m, idx) => ({ ...m, isPrimary: idx === 0 }));
+    }
+  } else if (primaryName) {
+    allMembers = [
+      {
+        name: primaryName,
+        age: primaryAge,
+        gender: primaryGender,
+        isPrimary: true
+      }
+    ];
+  }
+
+  const memberCount = allMembers.length || 1;
 
   // Fee calculation: Age > 5 is chargeable; Age <= 5 is free
-  const chargeableCount = result?.chargeableCount !== undefined 
-    ? result.chargeableCount 
-    : members.filter(m => Number(m.age) > 5).length;
+  const chargeableCount = allMembers.filter(m => {
+    const a = Number(m.age);
+    return !isNaN(a) && a > 5;
+  }).length;
 
-  const freeKidsCount = result?.freeKidsCount !== undefined 
-    ? result.freeKidsCount 
-    : members.filter(m => Number(m.age) > 0 && Number(m.age) <= 5).length;
+  const freeKidsCount = allMembers.filter(m => {
+    const a = Number(m.age);
+    return !isNaN(a) && a > 0 && a <= 5;
+  }).length;
 
-  const totalAmount = result?.totalAmount !== undefined 
-    ? result.totalAmount 
-    : chargeableCount * pricePerMember;
+  const totalAmount = chargeableCount * pricePerMember;
 
   // Direct 1-Click Receipt Download from Success Screen
   const handleDirectDownload = async () => {
@@ -91,7 +133,7 @@ export const SuccessModal = ({
       setIsDownloading(true);
 
       const canvas = await html2canvas(hiddenReceiptRef.current, {
-        scale: 2.5,
+        scale: 3,
         useCORS: true,
         backgroundColor: '#ffffff',
         logging: false,
@@ -102,7 +144,7 @@ export const SuccessModal = ({
 
       const image = canvas.toDataURL('image/png', 1.0);
       const link = document.createElement('a');
-      const filename = `Picnic_Receipt_${result?.registrationId || '2026'}.png`;
+      const filename = `Satsang_Yatra_Receipt_${result?.registrationId || '2026'}.png`;
       link.download = filename;
       link.href = image;
       document.body.appendChild(link);
@@ -113,7 +155,6 @@ export const SuccessModal = ({
       setTimeout(() => setDownloadSuccess(false), 4000);
     } catch (err) {
       console.error("Direct download failed:", err);
-      // Fallback: open receipt modal
       setShowReceipt(true);
     } finally {
       setIsDownloading(false);
@@ -130,47 +171,47 @@ export const SuccessModal = ({
 
       <div className="inline-flex items-center gap-1.5 px-3.5 py-1 rounded-full bg-emerald-100 text-emerald-800 text-xs font-bold mb-3">
         <Sparkles className="w-3.5 h-3.5 text-amber-500" />
-        <span>રજીસ્ટ્રેશન પૂર્ણ થયું</span>
+        <span>રજીસ્ટ્રેશન નોંધણી પૂર્ણ થઈ</span>
       </div>
 
       <h2 className="text-2xl sm:text-3xl font-extrabold text-slate-900 font-display mb-2">
         રજીસ્ટ્રેશન સફળ રહ્યું!
       </h2>
       <p className="text-emerald-700 font-bold text-base sm:text-lg mb-1">
-        અભિનંદન! તમારી પિકનિક નોંધણી સફળતાપૂર્વક થઈ ગઈ છે.
+        શ્રી બ્રહ્માનંદ સત્સંગ યાત્રા - 2026 માં આપનું સ્વાગત છે.
       </p>
       <p className="text-slate-600 text-xs sm:text-sm max-w-md mx-auto mb-6">
         નીચે આપેલા બટન પર ક્લિક કરીને તમારી સત્તાવાર રસીદ સીધી ડાઉનલોડ કરી લો.
       </p>
 
       {/* Registration ID Highlight Card */}
-      <div className="bg-gradient-to-br from-emerald-50 to-teal-50/50 border border-emerald-200 rounded-3xl p-5 sm:p-6 mb-6">
-        <p className="text-xs font-bold text-emerald-800 uppercase tracking-wider mb-1">
+      <div className="bg-slate-50 border border-slate-200 rounded-2xl p-5 mb-6">
+        <p className="text-xs font-bold text-slate-600 uppercase tracking-wider mb-1">
           તમારો સત્તાવાર રસીદ નંબર / ID
         </p>
         <div className="flex items-center justify-center gap-3 my-2">
           <span className="text-2xl sm:text-3xl font-black text-emerald-800 tracking-wider font-mono">
-            {result?.registrationId || "PIC-2026-0001"}
+            {result?.registrationId || "SBSY-2026-0001"}
           </span>
           <button
             type="button"
             onClick={handleCopyId}
-            className="p-2 rounded-xl bg-white border border-emerald-200 text-emerald-700 hover:bg-emerald-100 transition-colors shadow-sm"
+            className="p-2 rounded-xl bg-white border border-slate-200 text-slate-700 hover:bg-slate-100 transition-colors shadow-sm cursor-pointer"
             title="નંબર કોપી કરો"
           >
             {copiedId ? <Check className="w-4 h-4 text-emerald-600" /> : <Copy className="w-4 h-4" />}
           </button>
         </div>
         <p className="text-xs text-slate-500">
-          બસમાં બેસતી વખતે અથવા એન્ટ્રી વખતે આ રસીદ બતાવવાની રહેશે.
+          બસમાં બેસતી વખતે અથવા સ્થળ પર આ રસીદ બતાવવાની રહેશે.
         </p>
       </div>
 
       {/* Fee & Registration Summary Card */}
-      <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4 sm:p-5 text-left text-xs sm:text-sm space-y-2.5 mb-6">
+      <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4 sm:p-5 text-left text-xs sm:text-sm space-y-2 mb-6">
         <div className="flex items-center justify-between">
           <span className="text-slate-600 font-medium">મુખ્ય વ્યક્તિ:</span>
-          <span className="font-bold text-slate-900">{formData.primaryName} (+91 {formData.mobileNumber})</span>
+          <span className="font-bold text-slate-900">{primaryName} (+91 {mobileNumber})</span>
         </div>
 
         <div className="flex items-center justify-between">
@@ -178,39 +219,29 @@ export const SuccessModal = ({
           <span className="font-bold text-slate-900">{memberCount} વ્યક્તિ</span>
         </div>
 
-        {/* Age > 5 Fee Calculation */}
-        <div className="flex items-center justify-between text-emerald-800">
-          <span className="font-medium">૫ વર્ષથી મોટા સભ્યો (ચાર્જપાત્ર):</span>
-          <span className="font-bold">{chargeableCount} વ્યક્તિ (₹{chargeableCount * pricePerMember})</span>
+        <div className="flex items-center justify-between">
+          <span className="text-slate-600 font-medium">૫ વર્ષથી મોટા સભ્યો (ચાર્જપાત્ર):</span>
+          <span className="font-bold text-slate-900">{chargeableCount} વ્યક્તિ (₹{chargeableCount * pricePerMember})</span>
         </div>
 
         {freeKidsCount > 0 && (
-          <div className="flex items-center justify-between text-teal-700">
+          <div className="flex items-center justify-between text-slate-600">
             <span className="font-medium">૫ વર્ષ કે તેથી નાના બાળકો:</span>
-            <span className="font-bold">{freeKidsCount} બાળકો (મફત - ₹૦)</span>
+            <span className="font-bold text-slate-800">{freeKidsCount} બાળકો (મફત - ₹૦)</span>
           </div>
         )}
 
         <div className="flex items-center justify-between pt-2 border-t border-slate-200">
-          <span className="text-slate-800 font-bold text-sm sm:text-base">કુલ ચૂકવવાપાત્ર રકમ:</span>
-          <span className="font-black text-emerald-700 font-mono text-base sm:text-lg">₹{totalAmount.toLocaleString('en-IN')}</span>
+          <span className="text-slate-800 font-bold text-sm sm:text-base">કુલ ચૂકવવાપાત્ર રકમ (યાત્રા ફી):</span>
+          <span className="font-black text-emerald-700 font-mono text-base sm:text-lg">
+            ₹{totalAmount.toLocaleString('en-IN')}
+          </span>
         </div>
 
         <div className="flex items-center justify-between pt-2 border-t border-slate-200">
           <span className="text-slate-600 font-medium">મુસાફરીનું માધ્યમ:</span>
-          <span className={`inline-flex items-center gap-1 font-bold px-2.5 py-1 rounded-lg text-xs ${
-            isBus ? 'bg-blue-100 text-blue-800' : 'bg-purple-100 text-purple-800'
-          }`}>
-            {isBus ? <Bus className="w-3.5 h-3.5 text-blue-600" /> : <Car className="w-3.5 h-3.5 text-purple-600" />}
-            <span>{isBus ? 'બસમાં (જોથાણથી બસ સુવિધા)' : 'પોતાનું વાહન'}</span>
-          </span>
-        </div>
-
-        <div className="flex items-center justify-between pt-1">
-          <span className="text-slate-600 font-medium">સ્થિતિ:</span>
-          <span className="inline-flex items-center gap-1 font-bold text-emerald-700 text-xs bg-emerald-50 px-2 py-0.5 rounded">
-            <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
-            <span>રજીસ્ટ્રેશન કન્ફર્મ ✓</span>
+          <span className="font-bold text-slate-900">
+            {isBus ? `બસમાં (જોથાણથી બસ - બસભાડુ: ₹${busFare}/- પ્રતિ વ્યક્તિ)` : 'પોતાનું વાહન'}
           </span>
         </div>
       </div>
@@ -225,13 +256,11 @@ export const SuccessModal = ({
 
       {/* Action Buttons */}
       <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
-        
-        {/* Direct Download Button */}
         <button
           type="button"
           onClick={handleDirectDownload}
           disabled={isDownloading}
-          className="w-full sm:flex-1 inline-flex items-center justify-center gap-2 px-6 py-3.5 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-sm sm:text-base shadow-lg shadow-emerald-600/25 transition-all transform active:scale-[0.98] disabled:opacity-60"
+          className="w-full sm:flex-1 inline-flex items-center justify-center gap-2 px-6 py-3.5 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-sm sm:text-base shadow-lg shadow-emerald-600/25 transition-all transform active:scale-[0.98] disabled:opacity-60 cursor-pointer"
         >
           {isDownloading ? (
             <>
@@ -246,22 +275,20 @@ export const SuccessModal = ({
           )}
         </button>
 
-        {/* View Receipt Modal Button */}
         <button
           type="button"
           onClick={() => setShowReceipt(true)}
-          className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-5 py-3.5 rounded-2xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-sm transition-colors"
+          className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-5 py-3.5 rounded-2xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-sm transition-colors cursor-pointer"
           title="રસીદ જુઓ"
         >
           <Eye className="w-4 h-4 text-slate-600" />
           <span>રસીદ જુઓ</span>
         </button>
 
-        {/* Register Another Button */}
         <button
           type="button"
           onClick={onReset}
-          className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-5 py-3.5 rounded-2xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-sm transition-colors"
+          className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-5 py-3.5 rounded-2xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-sm transition-colors cursor-pointer"
         >
           <RotateCcw className="w-4 h-4 text-slate-500" />
           <span>બીજું રજીસ્ટ્રેશન</span>
@@ -275,6 +302,7 @@ export const SuccessModal = ({
             ...formData,
             registrationId: result?.registrationId,
             timestamp: result?.timestamp,
+            members: allMembers,
             totalMembers: memberCount,
             chargeableCount: chargeableCount,
             freeKidsCount: freeKidsCount,
@@ -288,174 +316,177 @@ export const SuccessModal = ({
         />
       )}
 
-      {/* Hidden Off-Screen Receipt Template for Instant Direct 1-Click Download */}
+      {/* Hidden Off-Screen Clean Receipt Template for Instant Direct 1-Click Download */}
       <div style={{ position: 'absolute', left: '-9999px', top: 0 }}>
         <div 
           ref={hiddenReceiptRef}
-          className="p-8 bg-white text-slate-800 font-sans"
-          style={{ width: '560px', boxSizing: 'border-box' }}
+          style={{ 
+            width: '600px', 
+            boxSizing: 'border-box',
+            backgroundColor: '#ffffff',
+            padding: '24px 28px',
+            color: '#0f172a',
+            fontFamily: "'Noto Sans Gujarati', 'Plus Jakarta Sans', sans-serif"
+          }}
         >
           {/* Header Title */}
-          <div className="border-b-2 border-emerald-800/20 pb-4 mb-5 text-center">
-            <div className="flex items-center justify-center gap-2 mb-1">
-              <span className="text-2xl">🌴</span>
-              <h2 className="text-2xl font-black text-emerald-950 tracking-tight">
-                ૧-દિવસીય વાર્ષિક પિકનિક ૨૦૨૬
-              </h2>
+          <div style={{ textAlign: 'center', paddingBottom: '14px', borderBottom: '2px solid #0f172a', marginBottom: '16px' }}>
+            <div style={{ fontSize: '20px', fontWeight: '900', color: '#0f172a', lineHeight: '1.3', marginBottom: '3px' }}>
+              🛕 {config.eventName || "શ્રી બ્રહ્માનંદ સત્સંગ યાત્રા - 2026"}
             </div>
-            <p className="text-xs font-bold text-emerald-800 uppercase tracking-wider">
-              સત્તાવાર રજીસ્ટ્રેશન રસીદ
-            </p>
-            <p className="text-xs text-slate-500 mt-0.5">
-              આનંદ, ઉલ્લાસ અને ભોજન સાથે યાદગાર પિકનિક
-            </p>
+            <div style={{ fontSize: '13px', fontWeight: '800', color: '#334155', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+              રજિસ્ટ્રેશન રસીદ
+            </div>
+            <div style={{ fontSize: '11px', color: '#64748b', fontWeight: '500', marginTop: '2px' }}>
+              {config.eventTagline || "ભગવાનના સાનિધ્યમાં આનંદની 1 દિવસીય સત્સંગ યાત્રા"}
+            </div>
           </div>
 
-          {/* Details Card */}
-          <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 text-xs mb-5">
-            <div className="grid grid-cols-2 gap-3 pb-3 border-b border-slate-200">
-              <div>
-                <span className="text-[11px] text-slate-500 font-bold block mb-0.5">રસીદ નંબર / ID</span>
-                <span className="text-sm font-extrabold text-emerald-800 font-mono block">
-                  {result?.registrationId || 'PIC-2026-0001'}
-                </span>
-              </div>
-              <div className="text-right">
-                <span className="text-[11px] text-slate-500 font-bold block mb-0.5">તારીખ અને સમય</span>
-                <span className="text-xs font-bold text-slate-800 block">
-                  {result?.timestamp || new Date().toLocaleString('en-IN')}
-                </span>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-2 gap-3 py-3 border-b border-slate-200">
-              <div>
-                <span className="text-[11px] text-slate-500 font-bold block mb-0.5">મુખ્ય વ્યક્તિનું નામ</span>
-                <span className="text-sm font-bold text-slate-900 block">
-                  {formData.primaryName}
-                </span>
-              </div>
-              <div className="text-right">
-                <span className="text-[11px] text-slate-500 font-bold block mb-0.5">મોબાઈલ નંબર</span>
-                <span className="text-sm font-bold text-slate-900 font-mono block">
-                  +91 {formData.mobileNumber}
-                </span>
-              </div>
-            </div>
-
-            <div className="pt-3">
-              <span className="text-[11px] text-slate-500 font-bold block mb-1">મુસાફરીનું માધ્યમ (વાહનની વિગત)</span>
-              <div className={`p-2.5 rounded-xl font-bold text-xs ${
-                isBus ? 'bg-blue-100 text-blue-900 border border-blue-300' : 'bg-purple-100 text-purple-900 border border-purple-300'
-              }`}>
-                {isBus ? '🚌 બસમાં (જોથાણથી બસની વ્યવસ્થા કરવામાં આવેલ છે)' : '🚗 પોતાનું વાહન (પોતાની રીતે આવવાનું રહેશે)'}
-              </div>
-            </div>
+          {/* Primary Details Grid */}
+          <div style={{ borderBottom: '1px solid #e2e8f0', paddingBottom: '12px', marginBottom: '14px', fontSize: '12px', lineHeight: '1.6' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+              <tbody>
+                <tr>
+                  <td style={{ width: '50%', padding: '4px 0', verticalAlign: 'top' }}>
+                    <span style={{ color: '#64748b' }}>રસીદ નંબર / ID: </span>
+                    <strong style={{ color: '#0f172a', fontFamily: 'monospace', fontSize: '13px' }}>
+                      {result?.registrationId || 'SBSY-2026-0001'}
+                    </strong>
+                  </td>
+                  <td style={{ width: '50%', padding: '4px 0', textAlign: 'right', verticalAlign: 'top' }}>
+                    <span style={{ color: '#64748b' }}>તારીખ: </span>
+                    <strong style={{ color: '#0f172a' }}>
+                      {result?.timestamp || new Date().toLocaleString('en-IN')}
+                    </strong>
+                  </td>
+                </tr>
+                <tr>
+                  <td style={{ padding: '4px 0', verticalAlign: 'top' }}>
+                    <span style={{ color: '#64748b' }}>મુખ્ય વ્યક્તિ: </span>
+                    <strong style={{ color: '#0f172a' }}>{primaryName || '—'}</strong>
+                  </td>
+                  <td style={{ padding: '4px 0', textAlign: 'right', verticalAlign: 'top' }}>
+                    <span style={{ color: '#64748b' }}>મોબાઈલ: </span>
+                    <strong style={{ color: '#0f172a', fontFamily: 'monospace' }}>+91 {mobileNumber}</strong>
+                  </td>
+                </tr>
+                <tr>
+                  <td colSpan="2" style={{ padding: '4px 0', paddingTop: '6px', verticalAlign: 'top' }}>
+                    <span style={{ color: '#64748b' }}>વાહન / મુસાફરી: </span>
+                    <strong style={{ color: '#0f172a' }}>
+                      {isBus 
+                        ? `બસમાં (જોથાણથી બસ વ્યવસ્થા - બસભાડુ: ₹${busFare}/- પ્રતિ વ્યક્તિ)` 
+                        : 'પોતાનું વાહન (પોતાની રીતે આવવાનું રહેશે)'}
+                    </strong>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
           </div>
 
           {/* Members Table */}
-          <div className="mb-5">
-            <div className="flex items-center justify-between mb-2">
-              <h4 className="text-xs font-bold text-slate-700 uppercase tracking-wider">
-                નોંધાયેલા સભ્યોની યાદી ({memberCount} સભ્યો):
-              </h4>
-              <span className="text-[11px] font-semibold text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
-                ૫ વર્ષથી ઉપર: ₹{pricePerMember} | ૫ વર્ષ કે તેથી નાના: મફત
-              </span>
+          <div style={{ marginBottom: '14px' }}>
+            <div style={{ fontSize: '12px', fontWeight: '800', color: '#0f172a', marginBottom: '6px' }}>
+              નોંધાયેલા સભ્યોની યાદી ({memberCount} સભ્યો):
             </div>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px', border: '1px solid #cbd5e1' }}>
+              <thead>
+                <tr style={{ backgroundColor: '#f8fafc', borderBottom: '1px solid #cbd5e1', fontWeight: '800', color: '#1e293b' }}>
+                  <th style={{ padding: '6px 8px', textAlign: 'center', width: '36px', borderRight: '1px solid #cbd5e1' }}>ક્રમ</th>
+                  <th style={{ padding: '6px 8px', textAlign: 'left', borderRight: '1px solid #cbd5e1' }}>સભ્યનું નામ</th>
+                  <th style={{ padding: '6px 8px', textAlign: 'center', width: '70px', borderRight: '1px solid #cbd5e1' }}>ઉંમર</th>
+                  <th style={{ padding: '6px 8px', textAlign: 'center', width: '60px', borderRight: '1px solid #cbd5e1' }}>જાતિ</th>
+                  <th style={{ padding: '6px 8px', textAlign: 'right', width: '80px' }}>ફી</th>
+                </tr>
+              </thead>
+              <tbody>
+                {allMembers.map((m, idx) => {
+                  const ageNum = Number(m.age) || 0;
+                  const isAbove5 = ageNum > 5;
 
-            <div className="border border-slate-200 rounded-xl overflow-hidden">
-              <table className="w-full text-left text-xs border-collapse">
-                <thead>
-                  <tr className="bg-slate-100 text-slate-700 font-bold border-b border-slate-200 text-[11px]">
-                    <th className="py-2.5 px-3 text-center w-10">ક્રમ</th>
-                    <th className="py-2.5 px-3">સભ્યનું પૂરું નામ</th>
-                    <th className="py-2.5 px-3 text-center">ઉંમર</th>
-                    <th className="py-2.5 px-3 text-center">જાતિ</th>
-                    <th className="py-2.5 px-3 text-right">ફી ગણતરી</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100 text-slate-700">
-                  {members.map((m, idx) => {
-                    const ageNum = Number(m.age) || 0;
-                    const isAbove5 = ageNum > 5;
-
-                    return (
-                      <tr key={idx} className={isAbove5 ? "hover:bg-slate-50" : "bg-emerald-50/40"}>
-                        <td className="py-2.5 px-3 text-center font-bold text-slate-500">{idx + 1}</td>
-                        <td className="py-2.5 px-3 font-semibold text-slate-900">{m.name || `સભ્ય ${idx + 1}`}</td>
-                        <td className="py-2.5 px-3 text-center font-medium">{m.age} વર્ષ</td>
-                        <td className="py-2.5 px-3 text-center text-slate-600">
-                          {m.gender === 'Male' ? 'પુરુષ' : m.gender === 'Female' ? 'સ્ત્રી' : 'અન્ય'}
-                        </td>
-                        <td className="py-2.5 px-3 text-right font-bold">
-                          {isAbove5 ? (
-                            <span className="text-slate-900 font-mono">₹{pricePerMember}</span>
-                          ) : (
-                            <span className="text-emerald-700 text-[11px] bg-emerald-100 px-1.5 py-0.5 rounded font-bold">
-                              મફત (₹૦)
-                            </span>
-                          )}
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
+                  return (
+                    <tr key={idx} style={{ borderBottom: '1px solid #e2e8f0' }}>
+                      <td style={{ padding: '6px 8px', textAlign: 'center', color: '#64748b', borderRight: '1px solid #e2e8f0' }}>
+                        {idx + 1}
+                      </td>
+                      <td style={{ padding: '6px 8px', fontWeight: '700', color: '#0f172a', borderRight: '1px solid #e2e8f0' }}>
+                        {m.name || `સભ્ય ${idx + 1}`} {m.isPrimary && <span style={{ color: '#047857', fontWeight: '600' }}>(મુખ્ય વ્યક્તિ)</span>}
+                      </td>
+                      <td style={{ padding: '6px 8px', textAlign: 'center', color: '#334155', borderRight: '1px solid #e2e8f0' }}>
+                        {m.age ? `${m.age} વર્ષ` : '—'}
+                      </td>
+                      <td style={{ padding: '6px 8px', textAlign: 'center', color: '#475569', borderRight: '1px solid #e2e8f0' }}>
+                        {m.gender === 'Male' ? 'પુરુષ' : m.gender === 'Female' ? 'સ્ત્રી' : (m.gender === 'Other' ? 'અન્ય' : '—')}
+                      </td>
+                      <td style={{ padding: '6px 8px', textAlign: 'right', fontWeight: '700', color: '#0f172a', fontFamily: 'monospace' }}>
+                        {isAbove5 ? `₹${pricePerMember}` : 'મફત'}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
           </div>
 
-          {/* Fee Calculation Summary Box */}
-          <div className="p-4 rounded-2xl bg-emerald-50/80 border border-emerald-200 mb-5 space-y-2 text-xs">
-            <div className="flex items-center justify-between text-slate-700">
-              <span>કુલ નોંધાયેલા સભ્યો:</span>
-              <span className="font-bold text-slate-900">{memberCount} વ્યક્તિ</span>
+          {/* Fee Summary */}
+          <div style={{ borderTop: '1px solid #cbd5e1', borderBottom: '1px solid #cbd5e1', padding: '10px 0', marginBottom: '14px', fontSize: '12px', lineHeight: '1.6' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', color: '#334155' }}>
+              <span>કુલ સભ્યો:</span>
+              <strong style={{ color: '#0f172a' }}>{memberCount} વ્યક્તિ</strong>
             </div>
-            <div className="flex items-center justify-between text-slate-700">
+            <div style={{ display: 'flex', justifyContent: 'space-between', color: '#334155' }}>
               <span>૫ વર્ષથી મોટી ઉંમરના સભ્યો (ચાર્જપાત્ર):</span>
-              <span className="font-bold text-emerald-900">{chargeableCount} × ₹{pricePerMember} = ₹{chargeableCount * pricePerMember}</span>
+              <strong style={{ color: '#0f172a' }}>{chargeableCount} × ₹{pricePerMember} = ₹{chargeableCount * pricePerMember}</strong>
             </div>
             {freeKidsCount > 0 && (
-              <div className="flex items-center justify-between text-emerald-800">
+              <div style={{ display: 'flex', justifyContent: 'space-between', color: '#475569' }}>
                 <span>૫ વર્ષ કે તેથી નાના બાળકો (મફત):</span>
-                <span className="font-bold">{freeKidsCount} બાળકો (₹૦)</span>
+                <span>{freeKidsCount} બાળકો (₹૦)</span>
               </div>
             )}
-            <div className="flex items-center justify-between pt-2.5 border-t border-emerald-200 text-sm font-black text-emerald-950">
-              <span>કુલ ચૂકવવાપાત્ર રકમ:</span>
-              <span className="text-lg text-emerald-700 font-mono">₹{totalAmount.toLocaleString('en-IN')}</span>
-            </div>
-            <div className="pt-1 flex items-center justify-between">
-              <span className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-800 bg-emerald-100 px-2 py-0.5 rounded-md">
-                <ShieldCheck className="w-3.5 h-3.5 text-emerald-700" />
-                <span>રજીસ્ટ્રેશન કન્ફર્મ થયેલ છે ✓</span>
-              </span>
-              <span className="text-[11px] text-slate-500 font-medium">૫ વર્ષથી નાના બાળકો માટે કોઈ ફી નથી</span>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingTop: '6px', marginTop: '4px', borderTop: '1px solid #e2e8f0', fontSize: '13px' }}>
+              <strong style={{ color: '#0f172a' }}>કુલ ચૂકવવાપાત્ર રકમ (યાત્રા ફી):</strong>
+              <strong style={{ fontSize: '16px', color: '#0f172a', fontFamily: 'monospace' }}>
+                ₹{totalAmount.toLocaleString('en-IN')}
+              </strong>
             </div>
           </div>
 
-          {/* Rules (Numbered List) */}
-          <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200 text-xs text-slate-700 leading-relaxed mb-5 space-y-1.5">
-            <p className="font-bold text-slate-900 mb-1">📌 અગત્યની સૂચનાઓ:</p>
-            <p>૧. બસમાં બેસતી વખતે અને પિકનિક સ્થળ પર આ રસીદ બતાવવાની રહેશે.</p>
-            <p>૨. ૫ વર્ષથી નાના બાળકો માટે કોઈ ફી ગણવામાં આવેલ નથી (મફત છે).</p>
-            <p>૩. {isBus ? "જોથાણથી બસ સમયસર ઉપડશે, દરેક સભ્યોએ સમયસર હાજર રહેવું." : "પોતાના વાહન સાથે સમયસર પિકનિક સ્થળ પર પહોંચી જવું."}</p>
+          {/* Payment Contact Notice */}
+          <div style={{ marginBottom: '14px', fontSize: '12px', lineHeight: '1.6' }}>
+            <div style={{ fontWeight: '800', color: '#0f172a' }}>
+              📌 તા. 16 - 09 - 2026 પહેલાં રસીદના રૂપિયા અલ્પેશભાઈ વેગડ પાસે જમા કરાવી દેવા.
+            </div>
+            <div style={{ fontWeight: '700', color: '#334155', marginTop: '2px' }}>
+              કોન્ટેક્ટ નંબર : <strong style={{ color: '#0f172a', fontFamily: 'monospace', fontSize: '13px' }}>76003 12101</strong>
+            </div>
           </div>
 
-          {/* Seal and Signature */}
-          <div className="pt-3 border-t border-slate-200 flex items-center justify-between text-xs text-slate-600">
-            <div className="flex items-center gap-2">
-              <div className="w-7 h-7 rounded-full bg-emerald-100 text-emerald-800 flex items-center justify-center font-bold text-xs border border-emerald-300">
-                ✓
-              </div>
-              <div>
-                <p className="font-bold text-slate-800 text-xs">સત્તાવાર મહોર (Verified)</p>
-                <p className="text-[10px] text-slate-400">૧-દિવસીય પિકનિક કમિટી ૨૦૨૬</p>
-              </div>
+          {/* Important Instructions */}
+          <div style={{ borderTop: '1px dashed #cbd5e1', paddingTop: '10px', marginBottom: '16px', fontSize: '11px', lineHeight: '1.6', color: '#334155' }}>
+            <div style={{ fontWeight: '800', color: '#0f172a', marginBottom: '4px' }}>
+              અગત્યની સૂચનાઓ:
             </div>
-            <div className="text-right">
-              <p className="font-bold text-slate-800 text-xs">કમિટી પ્રતિનિધિ</p>
-              <p className="text-[10px] text-slate-400">સત્તાવાર નોંધણી</p>
+            <div style={{ fontWeight: '700', color: '#991b1b', marginBottom: '3px' }}>
+              ૧. રસીદના રૂપિયા જમા થયા વગર તે રસીદનું કન્ફર્મેશન કરવામાં આવશે નહીં. તેની સૌએ ખાસ નોંધ લેવી.
+            </div>
+            <div style={{ marginBottom: '2px' }}>
+              ૨. નાના બાળકોની જવાબદારી તેના માતા - પિતાની રહેશે.
+            </div>
+            <div>
+              ૩. જોથાણ થી બસની વ્યવસ્થા કરેલી છે, તેમાં બસભાડુ – ₹૨૦૦/- પ્રતિ વ્યક્તિ રહેશે.
+            </div>
+          </div>
+
+          {/* Official Signature / Seal */}
+          <div style={{ borderTop: '1px solid #0f172a', paddingTop: '10px', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', fontSize: '11px', color: '#475569' }}>
+            <div>
+              <div style={{ fontWeight: '800', color: '#0f172a', fontSize: '12px' }}>✓ સત્તાવાર મહોર (Verified)</div>
+              <div style={{ fontSize: '10px', color: '#64748b' }}>શ્રી બ્રહ્માનંદ સત્સંગ યાત્રા કમિટી ૨૦૨૬</div>
+            </div>
+            <div style={{ textAlign: 'right' }}>
+              <div style={{ fontWeight: '800', color: '#0f172a', fontSize: '12px' }}>કમિટી પ્રતિનિધિ</div>
+              <div style={{ fontSize: '10px', color: '#64748b' }}>સત્તાવાર નોંધણી</div>
             </div>
           </div>
 

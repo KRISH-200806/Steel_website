@@ -3,15 +3,21 @@
 
 export const DEFAULT_CONFIG = {
   // Event Details
-  eventName: "૧-દિવસીય વાર્ષિક પિકનિક ૨૦૨૬",
-  eventTagline: "આનંદ, ઉલ્લાસ અને ભોજન સાથે યાદગાર પિકનિક",
+  eventName: "શ્રી બ્રહ્માનંદ સત્સંગ યાત્રા - 2026",
+  eventTagline: "ભગવાનના સાનિધ્યમાં આનંદની 1 દિવસીય સત્સંગ યાત્રા",
   eventDate: "૨૦૨૬",
   eventTime: "સવારે ૭:૦૦ થી",
-  eventVenue: "રિસોર્ટ",
-  reportingPoint: "જોથાણ",
+  eventVenue: "સત્સંગ યાત્રા સ્થળ",
+  reportingPoint: "જોથાણ (બસ ઉપડવાનું સ્થળ)",
   
-  // Pricing Configuration (Set to ₹100 per member)
+  // Payment Contact & Deadline Details
+  paymentDeadline: "16-09-2026",
+  paymentContactName: "અલ્પેશભાઈ વેગડ",
+  paymentContactPhone: "76003 12101",
+  
+  // Bus & Pricing Configuration
   feePerMember: 100, // INR per member (₹100)
+  busFare: 200, // INR per person for bus (₹200)
   currencySymbol: "₹",
   
   // QR Code Image Path
@@ -21,7 +27,7 @@ export const DEFAULT_CONFIG = {
   googleScriptUrl: "https://script.google.com/macros/s/AKfycby9aRUnG3yi8Gb9jZ4JSb6Jcf1dcFmeNo9peZiUkSDiKDd0jKeJ_YVXA3JvdfcAzylz/exec",
   
   // Registration ID Prefix
-  idPrefix: "PIC-2026-",
+  idPrefix: "SBSY-2026-",
   
   // Admin PIN to access dashboard & configuration
   adminPin: "2026"
@@ -29,7 +35,7 @@ export const DEFAULT_CONFIG = {
 
 // Local storage key for persistent user customizations
 export const STORAGE_KEYS = {
-  CONFIG: "picnic_app_config_v3", // updated to v3 to guarantee live webhook URL takes effect immediately
+  CONFIG: "picnic_app_config_v4", // updated to v4 to guarantee new branding and settings take effect immediately
   REGISTRATIONS: "picnic_app_registrations_v1"
 };
 

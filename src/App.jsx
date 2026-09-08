@@ -6,7 +6,11 @@ import {
   Lock,
   Users,
   Bus,
-  Car
+  Car,
+  Plus,
+  Trash2,
+  PhoneCall,
+  AlertTriangle
 } from 'lucide-react';
 import { getActiveConfig } from './config/picnicConfig';
 import { submitRegistration } from './services/submissionService';
@@ -17,53 +21,45 @@ export default function App() {
   const [config, setConfig] = useState(getActiveConfig());
   const [isAdminOpen, setIsAdminOpen] = useState(false);
 
-  // Primary Contact State
+  // Primary Contact State (Member 1 - Main Person)
   const [primaryName, setPrimaryName] = useState('');
   const [primaryAge, setPrimaryAge] = useState('');
   const [primaryGender, setPrimaryGender] = useState('');
   const [mobileNumber, setMobileNumber] = useState('');
   const [transportMode, setTransportMode] = useState(''); // 'Bus (Jothan)' | 'Own Vehicle'
   
-  // Dynamic Members State
-  const [memberCount, setMemberCount] = useState(1);
-  const [members, setMembers] = useState([{ name: '', age: '', gender: '' }]);
+  // Additional Accompanying Members State (Member 2, 3, etc.)
+  const [additionalMembers, setAdditionalMembers] = useState([]);
 
   // UI States
   const [errors, setErrors] = useState({});
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submissionResult, setSubmissionResult] = useState(null);
 
-  // Quick autofill Member 1 from Primary Contact
-  const handleAutoFillMember1 = () => {
-    setMembers(prev => {
-      const updated = [...prev];
-      if (updated.length > 0) {
-        updated[0] = { name: primaryName.trim(), age: primaryAge, gender: primaryGender };
-      }
-      return updated;
-    });
+  // Add new additional member
+  const handleAddMember = () => {
+    if (additionalMembers.length < 25) {
+      setAdditionalMembers(prev => [...prev, { name: '', age: '', gender: '' }]);
+    }
   };
 
-  // Adjust dynamic members count
-  const handleMemberCountChange = (count) => {
-    const valid = Math.max(1, Math.min(30, count));
-    setMemberCount(valid);
-    setMembers(prev => {
-      const list = [...prev];
-      if (valid > list.length) {
-        for (let i = list.length; i < valid; i++) {
-          list.push({ name: '', age: '', gender: '' });
-        }
-      } else if (valid < list.length) {
-        list.splice(valid);
-      }
-      return list;
-    });
+  // Remove an additional member
+  const handleRemoveMember = (index) => {
+    setAdditionalMembers(prev => prev.filter((_, idx) => idx !== index));
+    if (errors.members?.[index]) {
+      setErrors(prev => {
+        const next = { ...prev };
+        const memberErrs = { ...next.members };
+        delete memberErrs[index];
+        next.members = memberErrs;
+        return next;
+      });
+    }
   };
 
-  // Update dynamic member field
+  // Update additional member field
   const handleMemberFieldChange = (index, field, value) => {
-    setMembers(prev => {
+    setAdditionalMembers(prev => {
       const list = [...prev];
       list[index] = { ...list[index], [field]: value };
       return list;
@@ -79,19 +75,45 @@ export default function App() {
     }
   };
 
-  // Live fee calculation
+  // Pricing constants
   const feePerMember = config.feePerMember || 100;
-  
-  const chargeableCount = members.filter(m => {
+  const busFare = config.busFare || 200;
+
+  // Build unified member list (Primary Person + Additional Members)
+  const allMembersList = [
+    {
+      name: primaryName.trim(),
+      age: primaryAge,
+      gender: primaryGender,
+      isPrimary: true
+    },
+    ...additionalMembers.map(m => ({
+      name: (m.name || '').trim(),
+      age: m.age,
+      gender: m.gender,
+      isPrimary: false
+    }))
+  ];
+
+  const totalMembersCount = 1 + additionalMembers.length;
+
+  // Calculate chargeable (>5 years) vs free (<=5 years) for all members including primary
+  const pAgeNum = parseInt(primaryAge, 10);
+  const isPrimaryChargeable = !isNaN(pAgeNum) && pAgeNum > 5;
+  const isPrimaryFree = !isNaN(pAgeNum) && pAgeNum > 0 && pAgeNum <= 5;
+
+  const addChargeableCount = additionalMembers.filter(m => {
     const a = parseInt(m.age, 10);
     return !isNaN(a) && a > 5;
   }).length;
 
-  const freeKidsCount = members.filter(m => {
+  const addFreeCount = additionalMembers.filter(m => {
     const a = parseInt(m.age, 10);
     return !isNaN(a) && a > 0 && a <= 5;
   }).length;
 
+  const chargeableCount = (isPrimaryChargeable ? 1 : 0) + addChargeableCount;
+  const freeKidsCount = (isPrimaryFree ? 1 : 0) + addFreeCount;
   const totalPayableAmount = chargeableCount * feePerMember;
 
   // Form Validation in Gujarati
@@ -111,12 +133,12 @@ export default function App() {
       errs.mobileNumber = "કૃપા કરીને ૧૦ આંકડાનો સાચો મોબાઈલ નંબર લખો.";
     }
     if (!transportMode) {
-      errs.transportMode = "કૃપા કરીને બસ અથવા પોતાના વાહનનો વિકલ્પ પસંદ કરો.";
+      errs.transportMode = "કૃપા કરીને મુસાફરીનું માધ્યમ (બસ અથવા પોતાનું વાહન) પસંદ કરો.";
     }
 
     const memberErrs = {};
     let hasMemberErrors = false;
-    members.forEach((m, idx) => {
+    additionalMembers.forEach((m, idx) => {
       const mErr = {};
       if (!m.name?.trim()) { mErr.name = "સભ્યનું પૂરું નામ લખવું જરૂરી છે."; hasMemberErrors = true; }
       const ageNum = parseInt(m.age, 10);
@@ -142,17 +164,18 @@ export default function App() {
     setIsSubmitting(true);
     try {
       const payload = {
-        primaryName,
-        primaryAge,
+        primaryName: primaryName.trim(),
+        primaryAge: parseInt(primaryAge, 10),
         primaryGender,
-        mobileNumber,
+        mobileNumber: mobileNumber.trim(),
         transportMode,
-        totalMembers: memberCount,
+        totalMembers: totalMembersCount,
         chargeableCount,
         freeKidsCount,
         totalAmount: totalPayableAmount,
-        members
+        members: allMembersList
       };
+
       const res = await submitRegistration(payload);
       if (res?.success) {
         setSubmissionResult(res);
@@ -175,32 +198,39 @@ export default function App() {
     setPrimaryGender('');
     setMobileNumber('');
     setTransportMode('');
-    setMemberCount(1);
-    setMembers([{ name: '', age: '', gender: '' }]);
+    setAdditionalMembers([]);
     setErrors({});
     setSubmissionResult(null);
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   return (
-    <div className="min-h-screen bg-[#edf2f7] text-slate-800 font-sans antialiased pb-12">
+    <div className="min-h-screen bg-[#f1f5f9] text-slate-800 font-sans antialiased pb-12">
       
       {/* Header Bar */}
       <header className="bg-white border-b border-slate-200 sticky top-0 z-30 shadow-xs">
-        <div className="max-w-2xl mx-auto px-4 h-14 flex items-center">
+        <div className="max-w-2xl mx-auto px-4 h-16 flex items-center justify-between">
           <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-lg bg-emerald-600 flex items-center justify-center text-white font-bold text-base shadow-sm">
-              🌴
+            <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-emerald-600 to-teal-500 flex items-center justify-center text-white font-bold text-lg shadow-sm">
+              🛕
             </div>
-            <h1 className="font-bold text-base sm:text-lg text-slate-900 tracking-tight">
-              ૧-દિવસીય પિકનિક રજીસ્ટ્રેશન
-            </h1>
+            <div>
+              <h1 className="font-extrabold text-sm sm:text-base text-slate-900 tracking-tight">
+                {config.eventName || "શ્રી બ્રહ્માનંદ સત્સંગ યાત્રા - 2026"}
+              </h1>
+              <p className="text-[10px] sm:text-xs text-slate-500 font-medium hidden sm:block">
+                {config.eventTagline || "ભગવાનના સાનિધ્યમાં આનંદની 1 દિવસીય સત્સંગ યાત્રા"}
+              </p>
+            </div>
           </div>
+          <span className="text-[11px] font-bold text-emerald-800 bg-emerald-50 px-2.5 py-1 rounded-lg border border-emerald-200">
+            સત્તાવાર નોંધણી
+          </span>
         </div>
       </header>
 
       {/* Main Content */}
-      <main className="max-w-2xl mx-auto px-4 pt-6">
+      <main className="max-w-2xl mx-auto px-4 pt-5">
         
         {submissionResult ? (
           <SuccessModal
@@ -211,8 +241,8 @@ export default function App() {
               primaryGender, 
               mobileNumber, 
               transportMode, 
-              members, 
-              totalMembers: memberCount,
+              members: allMembersList, 
+              totalMembers: totalMembersCount,
               chargeableCount,
               freeKidsCount,
               totalAmount: totalPayableAmount
@@ -222,38 +252,60 @@ export default function App() {
           />
         ) : (
           <div>
-            {/* Gujarati Important Deadline Notice */}
-            <div className="bg-amber-50 border-2 border-amber-400/90 rounded-2xl p-4 sm:p-5 mb-5 shadow-sm flex items-start gap-3.5">
-              <div className="w-9 h-9 rounded-xl bg-amber-500 text-white flex items-center justify-center flex-shrink-0 shadow-sm mt-0.5">
-                <AlertCircle className="w-5 h-5" />
-              </div>
-              <div className="flex-1">
-                <p className="font-bold text-amber-950 text-sm sm:text-base leading-snug">
-                  📌 નોંધ: 16/09/2026 પહેલાં જ ફોર્મ રજીસ્ટર કરી લેવું, પછી ફોર્મ લેવામાં આવશે નહીં.
-                </p>
+            {/* Payment Deadline & Important Notice Banner */}
+            <div className="bg-amber-50 border-2 border-amber-400 rounded-2xl p-4 sm:p-5 mb-5 shadow-sm space-y-2">
+              <div className="flex items-start gap-3">
+                <div className="w-8 h-8 rounded-xl bg-amber-500 text-white flex items-center justify-center flex-shrink-0 shadow-xs mt-0.5">
+                  <AlertCircle className="w-5 h-5" />
+                </div>
+                <div className="space-y-1.5 flex-1">
+                  <p className="font-extrabold text-amber-950 text-xs sm:text-sm leading-snug">
+                    📌 તા. 16 - 09 - 2026 પહેલાં રસીદના રૂપિયા અલ્પેશભાઈ વેગડ પાસે જમા કરાવી દેવા.
+                  </p>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-bold text-amber-900 flex items-center gap-1">
+                      <PhoneCall className="w-3.5 h-3.5 text-amber-700" />
+                      કોન્ટેક્ટ નંબર :
+                    </span>
+                    <a 
+                      href="tel:7600312101" 
+                      className="font-mono text-xs sm:text-sm font-extrabold text-amber-950 bg-white px-2 py-0.5 rounded border border-amber-300 shadow-2xs hover:bg-amber-100"
+                    >
+                      76003 12101
+                    </a>
+                  </div>
+                  <p className="text-[11px] font-bold text-rose-700 pt-0.5">
+                    ⚠️ રસીદના રૂપિયા જમા થયા વગર તે રસીદનું કન્ફર્મેશન કરવામાં આવશે નહીં. તેની સૌએ ખાસ નોંધ લેવી.
+                  </p>
+                </div>
               </div>
             </div>
 
             <form onSubmit={handleSubmit} noValidate className="space-y-5">
               
-              {/* SECTION 1: મુખ્ય સંપર્ક વિગતો */}
-              <div className="bg-white rounded-2xl border border-slate-200/90 shadow-sm p-5 sm:p-6">
+              {/* SECTION 1: મુખ્ય વ્યક્તિની વિગતો */}
+              <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 sm:p-6">
                 <div className="flex items-center justify-between pb-3 mb-4 border-b border-slate-100">
-                  <h2 className="text-base sm:text-lg font-bold text-slate-900">
-                    મુખ્ય સંપર્ક વ્યક્તિની વિગતો
-                  </h2>
-                  <span className="text-xs text-slate-400 font-medium">વિભાગ ૧ (૨ માંથી)</span>
+                  <div>
+                    <h2 className="text-base sm:text-lg font-bold text-slate-900 flex items-center gap-2">
+                      <span>મુખ્ય વ્યક્તિની વિગતો</span>
+                      <span className="text-xs font-bold bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded">સભ્ય ૧</span>
+                    </h2>
+                    <p className="text-xs text-slate-500 mt-0.5">
+                      મુખ્ય વ્યક્તિનું નામ આપોઆપ સભ્યોની યાદી અને રસીદમાં સામેલ થશે.
+                    </p>
+                  </div>
                 </div>
 
                 <div className="space-y-4">
                   {/* Full Name */}
                   <div>
                     <label className="block text-xs sm:text-sm font-semibold text-slate-800 mb-1">
-                      મુખ્ય વ્યક્તિનું નામ <span className="text-rose-500">*</span>
+                      મુખ્ય વ્યક્તિનું પૂરું નામ <span className="text-rose-500">*</span>
                     </label>
                     <input
                       type="text"
-                      placeholder="પૂરું નામ લખો"
+                      placeholder="ઉદા. રમેશભાઈ પટેલ"
                       value={primaryName}
                       onChange={(e) => {
                         setPrimaryName(e.target.value);
@@ -271,13 +323,13 @@ export default function App() {
                     <div>
                       <div className="flex items-center justify-between mb-1">
                         <label className="block text-xs sm:text-sm font-semibold text-slate-800">
-                          ઉંમર <span className="text-rose-500">*</span>
+                          ઉંમર (વર્ષ) <span className="text-rose-500">*</span>
                         </label>
                         {primaryAge && (
                           <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${
                             Number(primaryAge) > 5 ? 'bg-emerald-100 text-emerald-800' : 'bg-teal-100 text-teal-800'
                           }`}>
-                            {Number(primaryAge) > 5 ? '₹૧૦૦' : 'મફત (₹૦)'}
+                            {Number(primaryAge) > 5 ? `₹${feePerMember}` : 'મફત (₹૦)'}
                           </span>
                         )}
                       </div>
@@ -351,15 +403,16 @@ export default function App() {
                     )}
                   </div>
 
-                  {/* Transportation Mode (Bus from Jothan or Own Vehicle) */}
+                  {/* Transportation Mode */}
                   <div className="pt-2">
                     <label className="block text-xs sm:text-sm font-semibold text-slate-800 mb-1">
                       મુસાફરીનું માધ્યમ (વાહનની વિગત) <span className="text-rose-500">*</span>
                     </label>
-                    <div className="p-3 bg-emerald-50/80 border border-emerald-200 rounded-xl mb-3 flex items-start gap-2">
-                      <Bus className="w-4 h-4 text-emerald-700 mt-0.5 flex-shrink-0" />
-                      <p className="text-xs text-emerald-900 font-semibold leading-relaxed">
-                        નોંધ: જોથાણ (Jothan) થી બસની વ્યવસ્થા કરવામાં આવેલ છે.
+                    
+                    <div className="p-3 bg-blue-50/80 border border-blue-200 rounded-xl mb-3 flex items-start gap-2">
+                      <Bus className="w-4 h-4 text-blue-700 mt-0.5 flex-shrink-0" />
+                      <p className="text-xs text-blue-950 font-bold leading-relaxed">
+                        નોંધ: જોથાણ થી બસની વ્યવસ્થા કરેલી છે, તેમાં બસભાડુ - ₹{busFare}/- પ્રતિ વ્યક્તિ રહેશે.
                       </p>
                     </div>
 
@@ -371,7 +424,7 @@ export default function App() {
                         }}
                         className={`flex items-center gap-3 p-3.5 rounded-xl border-2 cursor-pointer transition-all ${
                           transportMode === 'Bus (Jothan)' 
-                            ? 'bg-emerald-50/80 border-emerald-600 shadow-xs' 
+                            ? 'bg-emerald-50/90 border-emerald-600 shadow-xs' 
                             : 'bg-white border-slate-200 hover:border-slate-300'
                         }`}
                       >
@@ -388,7 +441,7 @@ export default function App() {
                             <Bus className="w-4 h-4 text-emerald-700" />
                             <span>બસમાં (જોથાણથી બસ સુવિધા)</span>
                           </span>
-                          <span className="text-[11px] text-slate-500">જોથાણથી બસ ઉપડશે</span>
+                          <span className="text-[11px] text-slate-500">બસભાડુ: ₹{busFare}/- પ્રતિ વ્યક્તિ</span>
                         </div>
                       </label>
 
@@ -399,7 +452,7 @@ export default function App() {
                         }}
                         className={`flex items-center gap-3 p-3.5 rounded-xl border-2 cursor-pointer transition-all ${
                           transportMode === 'Own Vehicle' 
-                            ? 'bg-emerald-50/80 border-emerald-600 shadow-xs' 
+                            ? 'bg-emerald-50/90 border-emerald-600 shadow-xs' 
                             : 'bg-white border-slate-200 hover:border-slate-300'
                         }`}
                       >
@@ -426,166 +479,164 @@ export default function App() {
                 </div>
               </div>
 
-              {/* SECTION 2: સાથે આવનાર સભ્યોની વિગતો */}
-              <div className="bg-white rounded-2xl border border-slate-200/90 shadow-sm p-5 sm:p-6">
+              {/* SECTION 2: સાથે આવનાર અન્ય સભ્યોની વિગતો */}
+              <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 sm:p-6">
                 <div className="flex items-center justify-between pb-3 mb-4 border-b border-slate-100">
-                  <h2 className="text-base sm:text-lg font-bold text-slate-900">
-                    સાથે આવનાર સભ્યોની વિગતો
-                  </h2>
-                  <span className="text-xs text-slate-400 font-medium">વિભાગ ૨ (૨ માંથી)</span>
+                  <div>
+                    <h2 className="text-base sm:text-lg font-bold text-slate-900">
+                      સાથે આવનાર અન્ય સભ્યોની વિગતો
+                    </h2>
+                    <p className="text-xs text-slate-500 mt-0.5">
+                      જો પરિવાર કે ગ્રૂપના અન્ય સભ્યો સાથે આવવાના હોય તો નીચે ઉમેરો.
+                    </p>
+                  </div>
+                  <span className="text-xs font-extrabold text-emerald-800 bg-emerald-50 px-2.5 py-1 rounded-lg border border-emerald-200">
+                    કુલ સભ્યો: {totalMembersCount}
+                  </span>
                 </div>
 
                 <div className="space-y-4">
-                  {/* Count selector */}
-                  <div>
-                    <label className="block text-xs sm:text-sm font-semibold text-slate-800 mb-1">
-                      કુલ કેટલા સભ્યો પિકનિકમાં આવવાના છે? <span className="text-rose-500">*</span>
-                    </label>
-                    <div className="flex items-center gap-2">
-                      <input
-                        type="number"
-                        min="1"
-                        max="30"
-                        value={memberCount}
-                        onChange={(e) => handleMemberCountChange(parseInt(e.target.value) || 1)}
-                        className="w-full px-3.5 py-2.5 bg-white border border-slate-300 rounded-xl text-sm font-bold text-slate-900 focus:outline-none focus:border-emerald-500"
-                      />
-                      <div className="flex items-center gap-1">
-                        <button
-                          type="button"
-                          onClick={() => handleMemberCountChange(Math.max(1, memberCount - 1))}
-                          className="w-10 h-10 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold flex items-center justify-center text-base"
-                          disabled={memberCount <= 1}
-                        >
-                          -
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => handleMemberCountChange(memberCount + 1)}
-                          className="w-10 h-10 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold flex items-center justify-center text-base"
-                        >
-                          +
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-
                   {/* Dynamic Member Cards */}
-                  <div className="space-y-3 pt-1">
-                    {members.map((member, index) => {
-                      const mErr = errors.members?.[index] || {};
-                      const memberAgeNum = Number(member.age) || 0;
-                      const hasAge = Boolean(member.age);
-                      const isChargeable = memberAgeNum > 5;
+                  {additionalMembers.length === 0 ? (
+                    <div className="p-4 rounded-xl bg-slate-50 border border-dashed border-slate-300 text-center space-y-2">
+                      <p className="text-xs text-slate-500">
+                        હાલ ફક્ત મુખ્ય વ્યક્તિ (૧ સભ્ય) નોંધાયેલ છે. જો બીજા સભ્યો ઉમેરવા હોય તો નીચેના બટન પર ક્લિક કરો.
+                      </p>
+                      <button
+                        type="button"
+                        onClick={handleAddMember}
+                        className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition-all shadow-xs cursor-pointer"
+                      >
+                        <Plus className="w-4 h-4" />
+                        <span>+ અન્ય સભ્ય ઉમેરો</span>
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      {additionalMembers.map((member, index) => {
+                        const mErr = errors.members?.[index] || {};
+                        const memberAgeNum = Number(member.age) || 0;
+                        const hasAge = Boolean(member.age);
+                        const isChargeable = memberAgeNum > 5;
 
-                      return (
-                        <div key={index} className="p-4 rounded-xl bg-slate-50/80 border border-slate-200/90 space-y-3">
-                          <div className="flex items-center justify-between">
-                            <div className="flex items-center gap-2">
-                              <span className="w-6 h-6 rounded-md bg-emerald-100 text-emerald-800 text-xs font-bold flex items-center justify-center">
-                                {index + 1}
-                              </span>
-                              <span className="font-bold text-sm text-slate-900">
-                                સભ્ય {index + 1}
-                              </span>
-                            </div>
-                            
-                            <div className="flex items-center gap-2">
-                              {hasAge && (
-                                <span className={`text-[11px] font-bold px-2 py-0.5 rounded-md ${
-                                  isChargeable ? 'bg-emerald-100 text-emerald-900' : 'bg-teal-100 text-teal-900'
-                                }`}>
-                                  {isChargeable ? `ચાર્જ: ₹${feePerMember}` : '👶 મફત (₹૦)'}
+                        return (
+                          <div key={index} className="p-4 rounded-xl bg-slate-50 border border-slate-200 space-y-3 relative">
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center gap-2">
+                                <span className="w-6 h-6 rounded-md bg-emerald-100 text-emerald-800 text-xs font-bold flex items-center justify-center">
+                                  {index + 2}
                                 </span>
-                              )}
-                              {index === 0 && primaryName.trim() && (
+                                <span className="font-bold text-sm text-slate-900">
+                                  સભ્ય {index + 2}
+                                </span>
+                              </div>
+                              
+                              <div className="flex items-center gap-2">
+                                {hasAge && (
+                                  <span className={`text-[11px] font-bold px-2 py-0.5 rounded-md ${
+                                    isChargeable ? 'bg-emerald-100 text-emerald-900' : 'bg-teal-100 text-teal-900'
+                                  }`}>
+                                    {isChargeable ? `ચાર્જ: ₹${feePerMember}` : '👶 મફત (₹૦)'}
+                                  </span>
+                                )}
                                 <button
                                   type="button"
-                                  onClick={handleAutoFillMember1}
-                                  className="text-xs text-emerald-700 font-semibold hover:underline bg-emerald-50 px-2 py-1 rounded-lg border border-emerald-200"
+                                  onClick={() => handleRemoveMember(index)}
+                                  className="p-1 rounded-lg text-rose-600 hover:bg-rose-50 transition-colors"
+                                  title="સભ્ય હટાવો"
                                 >
-                                  મુખ્ય વ્યક્તિ મુજબ
+                                  <Trash2 className="w-4 h-4" />
                                 </button>
-                              )}
+                              </div>
                             </div>
-                          </div>
 
-                          <div>
-                            <label className="block text-xs font-semibold text-slate-700 mb-1">
-                              પૂરું નામ <span className="text-rose-500">*</span>
-                            </label>
-                            <input
-                              type="text"
-                              placeholder="સભ્યનું પૂરું નામ લખો"
-                              value={member.name}
-                              onChange={(e) => handleMemberFieldChange(index, 'name', e.target.value)}
-                              className={`w-full px-3 py-2 bg-white border rounded-xl text-sm font-medium text-slate-900 placeholder:text-slate-400 focus:outline-none ${
-                                mErr.name ? 'border-rose-300 bg-rose-50/20' : 'border-slate-300 focus:border-emerald-500'
-                              }`}
-                            />
-                            {mErr.name && <p className="text-[11px] font-semibold text-rose-600 mt-0.5">{mErr.name}</p>}
-                          </div>
-
-                          <div className="grid grid-cols-2 gap-3">
                             <div>
                               <label className="block text-xs font-semibold text-slate-700 mb-1">
-                                ઉંમર <span className="text-rose-500">*</span>
+                                સભ્યનું પૂરું નામ <span className="text-rose-500">*</span>
                               </label>
                               <input
-                                type="number"
-                                min="1"
-                                max="120"
-                                placeholder="ઉંમર (વર્ષ)"
-                                value={member.age}
-                                onChange={(e) => handleMemberFieldChange(index, 'age', e.target.value)}
+                                type="text"
+                                placeholder="સભ્યનું પૂરું નામ લખો"
+                                value={member.name}
+                                onChange={(e) => handleMemberFieldChange(index, 'name', e.target.value)}
                                 className={`w-full px-3 py-2 bg-white border rounded-xl text-sm font-medium text-slate-900 placeholder:text-slate-400 focus:outline-none ${
-                                  mErr.age ? 'border-rose-300 bg-rose-50/20' : 'border-slate-300 focus:border-emerald-500'
+                                  mErr.name ? 'border-rose-300 bg-rose-50/20' : 'border-slate-300 focus:border-emerald-500'
                                 }`}
                               />
-                              {mErr.age && <p className="text-[11px] font-semibold text-rose-600 mt-0.5">{mErr.age}</p>}
+                              {mErr.name && <p className="text-[11px] font-semibold text-rose-600 mt-0.5">{mErr.name}</p>}
                             </div>
 
-                            <div>
-                              <label className="block text-xs font-semibold text-slate-700 mb-1">
-                                જાતિ / લિંગ <span className="text-rose-500">*</span>
-                              </label>
-                              <select
-                                value={member.gender}
-                                onChange={(e) => handleMemberFieldChange(index, 'gender', e.target.value)}
-                                className={`w-full px-3 py-2 bg-white border rounded-xl text-sm font-medium text-slate-900 focus:outline-none ${
-                                  mErr.gender ? 'border-rose-300 bg-rose-50/20' : 'border-slate-300 focus:border-emerald-500'
-                                }`}
-                              >
-                                <option value="">જાતિ પસંદ કરો</option>
-                                <option value="Male">પુરુષ</option>
-                                <option value="Female">સ્ત્રી</option>
-                                <option value="Other">અન્ય</option>
-                              </select>
-                              {mErr.gender && <p className="text-[11px] font-semibold text-rose-600 mt-0.5">{mErr.gender}</p>}
+                            <div className="grid grid-cols-2 gap-3">
+                              <div>
+                                <label className="block text-xs font-semibold text-slate-700 mb-1">
+                                  ઉંમર (વર્ષ) <span className="text-rose-500">*</span>
+                                </label>
+                                <input
+                                  type="number"
+                                  min="1"
+                                  max="120"
+                                  placeholder="ઉંમર"
+                                  value={member.age}
+                                  onChange={(e) => handleMemberFieldChange(index, 'age', e.target.value)}
+                                  className={`w-full px-3 py-2 bg-white border rounded-xl text-sm font-medium text-slate-900 placeholder:text-slate-400 focus:outline-none ${
+                                    mErr.age ? 'border-rose-300 bg-rose-50/20' : 'border-slate-300 focus:border-emerald-500'
+                                  }`}
+                                />
+                                {mErr.age && <p className="text-[11px] font-semibold text-rose-600 mt-0.5">{mErr.age}</p>}
+                              </div>
+
+                              <div>
+                                <label className="block text-xs font-semibold text-slate-700 mb-1">
+                                  જાતિ / લિંગ <span className="text-rose-500">*</span>
+                                </label>
+                                <select
+                                  value={member.gender}
+                                  onChange={(e) => handleMemberFieldChange(index, 'gender', e.target.value)}
+                                  className={`w-full px-3 py-2 bg-white border rounded-xl text-sm font-medium text-slate-900 focus:outline-none ${
+                                    mErr.gender ? 'border-rose-300 bg-rose-50/20' : 'border-slate-300 focus:border-emerald-500'
+                                  }`}
+                                >
+                                  <option value="">જાતિ પસંદ કરો</option>
+                                  <option value="Male">પુરુષ</option>
+                                  <option value="Female">સ્ત્રી</option>
+                                  <option value="Other">અન્ય</option>
+                                </select>
+                                {mErr.gender && <p className="text-[11px] font-semibold text-rose-600 mt-0.5">{mErr.gender}</p>}
+                              </div>
                             </div>
                           </div>
-                        </div>
-                      );
-                    })}
-                  </div>
+                        );
+                      })}
+
+                      <button
+                        type="button"
+                        onClick={handleAddMember}
+                        className="w-full py-2.5 px-4 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer border border-slate-200"
+                      >
+                        <Plus className="w-4 h-4 text-emerald-600" />
+                        <span>+ વધુ સભ્ય ઉમેરો</span>
+                      </button>
+                    </div>
+                  )}
+
                 </div>
               </div>
 
               {/* SUBMIT BUTTON & LIVE PRICE SUMMARY BAR */}
-              <div className="bg-slate-900 text-white rounded-2xl p-5 shadow-md space-y-3">
+              <div className="bg-slate-900 text-white rounded-2xl p-5 shadow-lg space-y-3">
                 <div className="flex flex-wrap items-center justify-between text-xs text-slate-300 pb-2 border-b border-slate-800 gap-2">
                   <span>મુખ્ય વ્યક્તિ: <strong className="text-white">{primaryName || '—'}</strong></span>
-                  <span>વાહન: <strong className="text-white">{transportMode === 'Bus (Jothan)' ? 'બસ (જોથાણ)' : transportMode === 'Own Vehicle' ? 'પોતાનું વાહન' : '—'}</strong></span>
+                  <span>વાહન: <strong className="text-white">{transportMode === 'Bus (Jothan)' ? 'બસ (જોથાણથી)' : transportMode === 'Own Vehicle' ? 'પોતાનું વાહન' : '—'}</strong></span>
                 </div>
 
                 {/* Calculation Detail */}
                 <div className="space-y-1 text-xs text-slate-300 py-1">
                   <div className="flex items-center justify-between">
-                    <span>કુલ સભ્યો:</span>
-                    <strong className="text-white">{memberCount} વ્યક્તિ</strong>
+                    <span>કુલ નોંધાયેલા સભ્યો (મુખ્ય વ્યક્તિ સહિત):</span>
+                    <strong className="text-white">{totalMembersCount} વ્યક્તિ</strong>
                   </div>
                   <div className="flex items-center justify-between">
-                    <span>૫ વર્ષથી મોટા (₹{feePerMember} પ્રતિ વ્યક્તિ):</span>
+                    <span>૫ વર્ષથી મોટા સભ્યો (₹{feePerMember} પ્રતિ વ્યક્તિ):</span>
                     <span className="text-emerald-400 font-bold">{chargeableCount} વ્યક્તિ = ₹{chargeableCount * feePerMember}</span>
                   </div>
                   {freeKidsCount > 0 && (
@@ -602,7 +653,7 @@ export default function App() {
                       <Users className="w-5 h-5" />
                     </div>
                     <div>
-                      <p className="text-[11px] text-slate-400 font-semibold uppercase">કુલ ચૂકવવાપાત્ર રકમ</p>
+                      <p className="text-[11px] text-slate-400 font-semibold uppercase">કુલ ચૂકવવાપાત્ર રકમ (યાત્રા ફી)</p>
                       <p className="text-2xl font-black text-emerald-400 font-mono">
                         ₹{totalPayableAmount.toLocaleString('en-IN')}
                       </p>
@@ -616,8 +667,8 @@ export default function App() {
                 <button
                   type="submit"
                   disabled={isSubmitting}
-                  className={`w-full py-3.5 px-6 rounded-xl font-bold text-base shadow-lg transition-all flex items-center justify-center gap-2 ${
-                    isSubmitting ? 'bg-slate-700 text-slate-400 cursor-not-allowed' : 'bg-emerald-500 hover:bg-emerald-600 text-white'
+                  className={`w-full py-3.5 px-6 rounded-xl font-bold text-base shadow-lg transition-all flex items-center justify-center gap-2 cursor-pointer ${
+                    isSubmitting ? 'bg-slate-700 text-slate-400 cursor-not-allowed' : 'bg-emerald-500 hover:bg-emerald-600 text-white active:scale-[0.99]'
                   }`}
                 >
                   {isSubmitting ? (
@@ -642,11 +693,11 @@ export default function App() {
 
       {/* Footer with organizer login */}
       <footer className="max-w-2xl mx-auto px-4 mt-8 text-center text-xs text-slate-400">
-        <p>© ૨૦૨૬ ૧-દિવસીય પિકનિક કમિટી</p>
+        <p>© ૨૦૨૬ શ્રી બ્રહ્માનંદ સત્સંગ યાત્રા કમિટી</p>
         <button
           type="button"
           onClick={() => setIsAdminOpen(true)}
-          className="mt-1 text-[11px] text-slate-400 hover:text-slate-600 underline"
+          className="mt-1 text-[11px] text-slate-400 hover:text-slate-600 underline cursor-pointer"
         >
           ઓર્ગેનાઈઝર લોગિન
         </button>
