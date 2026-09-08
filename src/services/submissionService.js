@@ -95,19 +95,36 @@ export const submitRegistration = async (formData) => {
 
   const membersList = formData.members || [];
   const feePerMember = config.feePerMember || 100;
+  const busFare = config.busFare || 200;
+  const transportMode = formData.transportMode || 'Bus (Jothan)';
+  const isBus = transportMode.includes('Bus');
 
-  // Rule: Age > 5 is chargeable at feePerMember (₹100); Age <= 5 is free (₹0)
-  const chargeableCount = membersList.filter(m => {
-    const age = Number(m.age);
-    return !isNaN(age) && age > 5;
-  }).length;
+  // Rule: Age > 5 is chargeable at feePerMember (₹100) + Bus Fare (₹200 if bus); Age <= 5 is free (₹0)
+  const chargeableCount = formData.chargeableCount !== undefined
+    ? formData.chargeableCount
+    : membersList.filter(m => {
+        const age = Number(m.age);
+        return !isNaN(age) && age > 5;
+      }).length;
 
-  const freeKidsCount = membersList.filter(m => {
-    const age = Number(m.age);
-    return !isNaN(age) && age > 0 && age <= 5;
-  }).length;
+  const freeKidsCount = formData.freeKidsCount !== undefined
+    ? formData.freeKidsCount
+    : membersList.filter(m => {
+        const age = Number(m.age);
+        return !isNaN(age) && age > 0 && age <= 5;
+      }).length;
 
-  const totalAmount = chargeableCount * feePerMember;
+  const memberFeeTotal = formData.memberFeeTotal !== undefined
+    ? formData.memberFeeTotal
+    : chargeableCount * feePerMember;
+
+  const busFeeTotal = formData.busFeeTotal !== undefined
+    ? formData.busFeeTotal
+    : (isBus ? chargeableCount * busFare : 0);
+
+  const totalAmount = formData.totalAmount !== undefined
+    ? formData.totalAmount
+    : (memberFeeTotal + busFeeTotal);
 
   // Prepare full data payload
   const fullPayload = {
@@ -117,23 +134,30 @@ export const submitRegistration = async (formData) => {
     primaryAge: formData.primaryAge ? Number(formData.primaryAge) : '',
     primaryGender: formData.primaryGender || '',
     mobileNumber: (formData.mobileNumber || '').trim(),
-    transportMode: formData.transportMode || 'Bus (Jothan)',
+    transportMode: transportMode,
     totalMembers: membersList.length || 1,
     chargeableCount: chargeableCount,
     freeKidsCount: freeKidsCount,
     feePerMember: feePerMember,
+    busFare: busFare,
+    memberFeeTotal: memberFeeTotal,
+    busFeeTotal: busFeeTotal,
     totalAmount: totalAmount,
     status: "Confirmed",
     members: membersList.map((m, idx) => {
       const ageNum = Number(m.age) || 0;
       const isChargeable = ageNum > 5;
+      const mMemberFee = isChargeable ? feePerMember : 0;
+      const mBusFee = (isChargeable && isBus) ? busFare : 0;
       return {
         index: idx + 1,
         name: (m.name || '').trim(),
         age: ageNum,
         gender: m.gender || '',
         isChargeable: isChargeable,
-        fee: isChargeable ? feePerMember : 0
+        memberFee: mMemberFee,
+        busFee: mBusFee,
+        fee: mMemberFee + mBusFee
       };
     })
   };
@@ -247,11 +271,13 @@ export const exportToCSV = (registrations) => {
     "Primary Age",
     "Primary Gender",
     "Mobile Number",
-    "Transportation Mode (Bus from Jothan / Own Vehicle)",
+    "Transportation Mode",
     "Total Members",
     "Chargeable Members (>5 yrs)",
     "Free Kids (<=5 yrs)",
-    "Total Fee (INR)",
+    "Member Fee (₹)",
+    "Bus Fare (₹)",
+    "Total Amount (₹)",
     "Status"
   ];
 
@@ -259,7 +285,7 @@ export const exportToCSV = (registrations) => {
     headers.push(`Member ${i} Name`);
     headers.push(`Member ${i} Age`);
     headers.push(`Member ${i} Gender`);
-    headers.push(`Member ${i} Fee (INR)`);
+    headers.push(`Member ${i} Fee (₹)`);
   }
 
   const csvRows = [headers.join(",")];
@@ -267,6 +293,7 @@ export const exportToCSV = (registrations) => {
   registrations.forEach(r => {
     const mobileValue = r.mobileNumber ? `="${r.mobileNumber}"` : '""';
     const transportValue = `"${r.transportMode || 'Bus (Jothan)'}"`;
+    const isBus = (r.transportMode || '').includes('Bus');
     const members = r.members || [];
     
     const chargeable = r.chargeableCount !== undefined 
@@ -276,10 +303,13 @@ export const exportToCSV = (registrations) => {
     const freeKids = r.freeKidsCount !== undefined 
       ? r.freeKidsCount 
       : members.filter(m => Number(m.age) > 0 && Number(m.age) <= 5).length;
+
+    const memFee = r.memberFeeTotal !== undefined ? r.memberFeeTotal : (chargeable * 100);
+    const bFee = r.busFeeTotal !== undefined ? r.busFeeTotal : (isBus ? chargeable * 200 : 0);
       
     const totalAmt = r.totalAmount !== undefined 
       ? r.totalAmount 
-      : chargeable * 100;
+      : (memFee + bFee);
 
     const row = [
       `"${r.registrationId || ''}"`,
@@ -292,6 +322,8 @@ export const exportToCSV = (registrations) => {
       r.totalMembers || members.length || 1,
       chargeable,
       freeKids,
+      memFee,
+      bFee,
       totalAmt,
       `"${r.status || 'Confirmed'}"`
     ];
@@ -299,7 +331,7 @@ export const exportToCSV = (registrations) => {
     for (let i = 0; i < maxMembers; i++) {
       if (i < members.length) {
         const mAge = Number(members[i].age) || 0;
-        const mFee = mAge > 5 ? 100 : 0;
+        const mFee = mAge > 5 ? (isBus ? 300 : 100) : 0;
         row.push(`"${(members[i].name || '').replace(/"/g, '""')}"`);
         row.push(members[i].age || '');
         row.push(`"${members[i].gender || ''}"`);
@@ -360,7 +392,7 @@ export const exportToExcelFormatted = (registrations) => {
     <body>
       <h2>Shri Brahmanand Satsang Yatra 2026 - Registration Records</h2>
       <p>Generated on: ${new Date().toLocaleString('en-IN')}</p>
-      <p>Fee Policy: Above 5 Years = ₹100 | Age 5 & Under = Free (₹0) | Bus Fare = ₹200/person</p>
+      <p>Fee Policy: Above 5 Years = ₹100 Member Fee + ₹200 Bus Fare (if bus) | Age 5 & Under = Free (₹0)</p>
       <table>
         <thead>
           <tr>
@@ -374,6 +406,8 @@ export const exportToExcelFormatted = (registrations) => {
             <th>Total Members</th>
             <th>Above 5 Yrs (Chargeable)</th>
             <th>5 Yrs & Under (Free)</th>
+            <th>Member Fee (₹)</th>
+            <th>Bus Fare (₹)</th>
             <th>Total Amount (₹)</th>
             <th>Status</th>
   `;
@@ -397,10 +431,13 @@ export const exportToExcelFormatted = (registrations) => {
     const freeKids = r.freeKidsCount !== undefined 
       ? r.freeKidsCount 
       : members.filter(m => Number(m.age) > 0 && Number(m.age) <= 5).length;
+
+    const memFee = r.memberFeeTotal !== undefined ? r.memberFeeTotal : (chargeable * 100);
+    const bFee = r.busFeeTotal !== undefined ? r.busFeeTotal : (isBus ? chargeable * 200 : 0);
       
     const totalAmt = r.totalAmount !== undefined 
       ? r.totalAmount 
-      : chargeable * 100;
+      : (memFee + bFee);
 
     tableHtml += `
       <tr>
@@ -414,6 +451,8 @@ export const exportToExcelFormatted = (registrations) => {
         <td class="text-center"><strong>${r.totalMembers || members.length || 1}</strong></td>
         <td class="text-center">${chargeable}</td>
         <td class="text-center">${freeKids}</td>
+        <td class="text-center">₹${memFee}</td>
+        <td class="text-center">${isBus ? `₹${bFee}` : '₹0'}</td>
         <td class="bg-amount">₹${totalAmt.toLocaleString('en-IN')}</td>
         <td class="text-center bg-confirmed">${r.status || 'Confirmed'}</td>
       `;
@@ -421,7 +460,7 @@ export const exportToExcelFormatted = (registrations) => {
     for (let i = 0; i < maxMembers; i++) {
       if (i < members.length) {
         const mAge = Number(members[i].age) || 0;
-        const mFee = mAge > 5 ? 100 : 0;
+        const mFee = mAge > 5 ? (isBus ? 300 : 100) : 0;
         tableHtml += `
           <td>${members[i].name || ''}</td>
           <td class="text-center">${members[i].age || ''}</td>

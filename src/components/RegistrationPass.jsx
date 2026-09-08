@@ -197,7 +197,7 @@ export const RegistrationPass = ({ registrationData, config = {}, onClose }) => 
           {/* Important Notice Box */}
           <div className="p-3.5 bg-amber-50 rounded-2xl border border-amber-300 text-amber-950 text-[11px] leading-relaxed mb-4">
             <p className="font-bold mb-0.5">📌 અગત્યની સૂચનાઓ:</p>
-            <p className="font-bold text-rose-700">૧. રસીદના રૂપિયા જમા થયા વગર તે રસીદનું કન્ફર્મેશન કરવામાં આવશે નહીં. તેની સૌએ ખાસ નોંધ લેવી.</p>
+            <p className="font-bold text-rose-700">૧. તા. 16 - 09 - 2026 પહેલાં યાત્રાના પૈસા જે હરિભક્તે જમા નહીં કરાવ્યા હોય એમને યાત્રામાં લઈ જવામાં આવશે નહીં.</p>
             <p className="mt-0.5">૨. નાના બાળકોની જવાબદારી તેના માતા - પિતાની રહેશે.</p>
             <p className="mt-0.5">૩. જોથાણ થી બસની વ્યવસ્થા કરેલી છે, તેમાં બસભાડુ - ₹૨૦૦/- પ્રતિ વ્યક્તિ રહેશે.</p>
             <p className="mt-1 text-slate-700 font-medium">

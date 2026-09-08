@@ -99,9 +99,11 @@ export const AdminDashboard = ({ onClose }) => {
   // Total Collection based on Age > 5
   const totalCollectionAmount = registrations.reduce((acc, r) => {
     if (r.totalAmount !== undefined) return acc + Number(r.totalAmount);
+    const isBus = (r.transportMode || '').includes('Bus');
     const members = r.members || [];
     const chargeable = members.filter(m => Number(m.age) > 5).length;
-    return acc + (chargeable * (config.feePerMember || 100));
+    const perPerson = (config.feePerMember || 100) + (isBus ? (config.busFare || 200) : 0);
+    return acc + (chargeable * perPerson);
   }, 0);
 
   // Filter logic
@@ -387,10 +389,13 @@ export const AdminDashboard = ({ onClose }) => {
                         const freeKids = row.freeKidsCount !== undefined
                           ? row.freeKidsCount
                           : members.filter(m => Number(m.age) > 0 && Number(m.age) <= 5).length;
+
+                        const memFee = row.memberFeeTotal !== undefined ? row.memberFeeTotal : (chargeable * (config.feePerMember || 100));
+                        const bFee = row.busFeeTotal !== undefined ? row.busFeeTotal : (isBus ? chargeable * (config.busFare || 200) : 0);
                           
                         const totalAmt = row.totalAmount !== undefined
                           ? row.totalAmount
-                          : chargeable * (config.feePerMember || 100);
+                          : (memFee + bFee);
 
                         return (
                           <React.Fragment key={row.registrationId}>
@@ -502,7 +507,9 @@ export const AdminDashboard = ({ onClose }) => {
                                             <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${
                                               isChg ? 'bg-emerald-100 text-emerald-900' : 'bg-teal-100 text-teal-800'
                                             }`}>
-                                              {isChg ? `₹${config.feePerMember || 100}` : 'Free (₹0)'}
+                                              {isChg 
+                                                ? (isBus ? `₹${(config.feePerMember || 100) + (config.busFare || 200)} (₹${config.feePerMember || 100}+₹${config.busFare || 200})` : `₹${config.feePerMember || 100}`) 
+                                                : 'Free (₹0)'}
                                             </span>
                                           </div>
                                         );

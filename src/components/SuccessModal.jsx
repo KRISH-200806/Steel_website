@@ -123,7 +123,18 @@ export const SuccessModal = ({
     return !isNaN(a) && a > 0 && a <= 5;
   }).length;
 
-  const totalAmount = chargeableCount * pricePerMember;
+  // Fee calculations (Age > 5 only)
+  const memberFeeTotal = formData.memberFeeTotal !== undefined 
+    ? formData.memberFeeTotal 
+    : chargeableCount * pricePerMember;
+
+  const busFeeTotal = formData.busFeeTotal !== undefined 
+    ? formData.busFeeTotal 
+    : (isBus ? chargeableCount * busFare : 0);
+
+  const totalAmount = formData.totalAmount !== undefined 
+    ? formData.totalAmount 
+    : (memberFeeTotal + busFeeTotal);
 
   // Direct 1-Click Receipt Download from Success Screen
   const handleDirectDownload = async () => {
@@ -181,13 +192,13 @@ export const SuccessModal = ({
         શ્રી બ્રહ્માનંદ સત્સંગ યાત્રા - 2026 માં આપનું સ્વાગત છે.
       </p>
       <p className="text-slate-600 text-xs sm:text-sm max-w-md mx-auto mb-6">
-        નીચે આપેલા બટન પર ક્લિક કરીને તમારી સત્તાવાર રસીદ સીધી ડાઉનલોડ કરી લો.
+        નીચે આપેલા બટન પર ક્લિક કરીને તમારી રસીદ સીધી ડાઉનલોડ કરી લો.
       </p>
 
       {/* Registration ID Highlight Card */}
       <div className="bg-slate-50 border border-slate-200 rounded-2xl p-5 mb-6">
         <p className="text-xs font-bold text-slate-600 uppercase tracking-wider mb-1">
-          તમારો સત્તાવાર રસીદ નંબર / ID
+          તમારો રસીદ નંબર / ID
         </p>
         <div className="flex items-center justify-center gap-3 my-2">
           <span className="text-2xl sm:text-3xl font-black text-emerald-800 tracking-wider font-mono">
@@ -220,9 +231,16 @@ export const SuccessModal = ({
         </div>
 
         <div className="flex items-center justify-between">
-          <span className="text-slate-600 font-medium">૫ વર્ષથી મોટા સભ્યો (ચાર્જપાત્ર):</span>
-          <span className="font-bold text-slate-900">{chargeableCount} વ્યક્તિ (₹{chargeableCount * pricePerMember})</span>
+          <span className="text-slate-600 font-medium">સભ્ય ફી (૫ વર્ષથી મોટા):</span>
+          <span className="font-bold text-slate-900">{chargeableCount} વ્યક્તિ (₹{memberFeeTotal})</span>
         </div>
+
+        {isBus && (
+          <div className="flex items-center justify-between">
+            <span className="text-slate-600 font-medium">બસ ભાડું (૫ વર્ષથી મોટા):</span>
+            <span className="font-bold text-slate-900">{chargeableCount} વ્યક્તિ (₹{busFeeTotal})</span>
+          </div>
+        )}
 
         {freeKidsCount > 0 && (
           <div className="flex items-center justify-between text-slate-600">
@@ -232,7 +250,7 @@ export const SuccessModal = ({
         )}
 
         <div className="flex items-center justify-between pt-2 border-t border-slate-200">
-          <span className="text-slate-800 font-bold text-sm sm:text-base">કુલ ચૂકવવાપાત્ર રકમ (યાત્રા ફી):</span>
+          <span className="text-slate-800 font-bold text-sm sm:text-base">કુલ ચૂકવવાપાત્ર રકમ:</span>
           <span className="font-black text-emerald-700 font-mono text-base sm:text-lg">
             ₹{totalAmount.toLocaleString('en-IN')}
           </span>
@@ -270,7 +288,7 @@ export const SuccessModal = ({
           ) : (
             <>
               <Download className="w-5 h-5" />
-              <span>સત્તાવાર રસીદ ડાઉનલોડ કરો</span>
+              <span>રસીદ ડાઉનલોડ કરો</span>
             </>
           )}
         </button>
@@ -307,6 +325,8 @@ export const SuccessModal = ({
             chargeableCount: chargeableCount,
             freeKidsCount: freeKidsCount,
             freeCount: freeKidsCount,
+            memberFeeTotal: memberFeeTotal,
+            busFeeTotal: busFeeTotal,
             totalAmount: totalAmount,
             transportMode: transportMode,
             status: "Confirmed"
@@ -324,36 +344,36 @@ export const SuccessModal = ({
             width: '600px', 
             boxSizing: 'border-box',
             backgroundColor: '#ffffff',
-            padding: '24px 28px',
+            padding: '20px 24px',
             color: '#0f172a',
             fontFamily: "'Noto Sans Gujarati', 'Plus Jakarta Sans', sans-serif"
           }}
         >
           {/* Header Title */}
-          <div style={{ textAlign: 'center', paddingBottom: '14px', borderBottom: '2px solid #0f172a', marginBottom: '16px' }}>
-            <div style={{ fontSize: '20px', fontWeight: '900', color: '#0f172a', lineHeight: '1.3', marginBottom: '3px' }}>
+          <div style={{ textAlign: 'center', paddingBottom: '8px', borderBottom: '2px solid #0f172a', marginBottom: '10px' }}>
+            <div style={{ fontSize: '22px', fontWeight: '900', color: '#0f172a', lineHeight: '1.2', marginBottom: '2px' }}>
               🛕 {config.eventName || "શ્રી બ્રહ્માનંદ સત્સંગ યાત્રા - 2026"}
             </div>
-            <div style={{ fontSize: '13px', fontWeight: '800', color: '#334155', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+            <div style={{ fontSize: '15px', fontWeight: '800', color: '#334155', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
               રજિસ્ટ્રેશન રસીદ
             </div>
-            <div style={{ fontSize: '11px', color: '#64748b', fontWeight: '500', marginTop: '2px' }}>
+            <div style={{ fontSize: '12px', color: '#64748b', fontWeight: '600', marginTop: '1px' }}>
               {config.eventTagline || "ભગવાનના સાનિધ્યમાં આનંદની 1 દિવસીય સત્સંગ યાત્રા"}
             </div>
           </div>
 
           {/* Primary Details Grid */}
-          <div style={{ borderBottom: '1px solid #e2e8f0', paddingBottom: '12px', marginBottom: '14px', fontSize: '12px', lineHeight: '1.6' }}>
+          <div style={{ borderBottom: '1px solid #e2e8f0', paddingBottom: '8px', marginBottom: '10px', fontSize: '14px', lineHeight: '1.5' }}>
             <table style={{ width: '100%', borderCollapse: 'collapse' }}>
               <tbody>
                 <tr>
-                  <td style={{ width: '50%', padding: '4px 0', verticalAlign: 'top' }}>
+                  <td style={{ width: '50%', padding: '3px 0', verticalAlign: 'top' }}>
                     <span style={{ color: '#64748b' }}>રસીદ નંબર / ID: </span>
-                    <strong style={{ color: '#0f172a', fontFamily: 'monospace', fontSize: '13px' }}>
+                    <strong style={{ color: '#0f172a', fontFamily: 'monospace', fontSize: '15px' }}>
                       {result?.registrationId || 'SBSY-2026-0001'}
                     </strong>
                   </td>
-                  <td style={{ width: '50%', padding: '4px 0', textAlign: 'right', verticalAlign: 'top' }}>
+                  <td style={{ width: '50%', padding: '3px 0', textAlign: 'right', verticalAlign: 'top' }}>
                     <span style={{ color: '#64748b' }}>તારીખ: </span>
                     <strong style={{ color: '#0f172a' }}>
                       {result?.timestamp || new Date().toLocaleString('en-IN')}
@@ -361,17 +381,17 @@ export const SuccessModal = ({
                   </td>
                 </tr>
                 <tr>
-                  <td style={{ padding: '4px 0', verticalAlign: 'top' }}>
+                  <td style={{ padding: '3px 0', verticalAlign: 'top' }}>
                     <span style={{ color: '#64748b' }}>મુખ્ય વ્યક્તિ: </span>
                     <strong style={{ color: '#0f172a' }}>{primaryName || '—'}</strong>
                   </td>
-                  <td style={{ padding: '4px 0', textAlign: 'right', verticalAlign: 'top' }}>
+                  <td style={{ padding: '3px 0', textAlign: 'right', verticalAlign: 'top' }}>
                     <span style={{ color: '#64748b' }}>મોબાઈલ: </span>
                     <strong style={{ color: '#0f172a', fontFamily: 'monospace' }}>+91 {mobileNumber}</strong>
                   </td>
                 </tr>
                 <tr>
-                  <td colSpan="2" style={{ padding: '4px 0', paddingTop: '6px', verticalAlign: 'top' }}>
+                  <td colSpan="2" style={{ padding: '3px 0', paddingTop: '4px', verticalAlign: 'top' }}>
                     <span style={{ color: '#64748b' }}>વાહન / મુસાફરી: </span>
                     <strong style={{ color: '#0f172a' }}>
                       {isBus 
@@ -385,18 +405,18 @@ export const SuccessModal = ({
           </div>
 
           {/* Members Table */}
-          <div style={{ marginBottom: '14px' }}>
-            <div style={{ fontSize: '12px', fontWeight: '800', color: '#0f172a', marginBottom: '6px' }}>
+          <div style={{ marginBottom: '10px' }}>
+            <div style={{ fontSize: '14px', fontWeight: '800', color: '#0f172a', marginBottom: '5px' }}>
               નોંધાયેલા સભ્યોની યાદી ({memberCount} સભ્યો):
             </div>
-            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px', border: '1px solid #cbd5e1' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '14px', border: '1px solid #cbd5e1' }}>
               <thead>
                 <tr style={{ backgroundColor: '#f8fafc', borderBottom: '1px solid #cbd5e1', fontWeight: '800', color: '#1e293b' }}>
                   <th style={{ padding: '6px 8px', textAlign: 'center', width: '36px', borderRight: '1px solid #cbd5e1' }}>ક્રમ</th>
                   <th style={{ padding: '6px 8px', textAlign: 'left', borderRight: '1px solid #cbd5e1' }}>સભ્યનું નામ</th>
                   <th style={{ padding: '6px 8px', textAlign: 'center', width: '70px', borderRight: '1px solid #cbd5e1' }}>ઉંમર</th>
                   <th style={{ padding: '6px 8px', textAlign: 'center', width: '60px', borderRight: '1px solid #cbd5e1' }}>જાતિ</th>
-                  <th style={{ padding: '6px 8px', textAlign: 'right', width: '80px' }}>ફી</th>
+                  <th style={{ padding: '6px 8px', textAlign: 'center', width: '115px' }}>ફી</th>
                 </tr>
               </thead>
               <tbody>
@@ -418,8 +438,24 @@ export const SuccessModal = ({
                       <td style={{ padding: '6px 8px', textAlign: 'center', color: '#475569', borderRight: '1px solid #e2e8f0' }}>
                         {m.gender === 'Male' ? 'પુરુષ' : m.gender === 'Female' ? 'સ્ત્રી' : (m.gender === 'Other' ? 'અન્ય' : '—')}
                       </td>
-                      <td style={{ padding: '6px 8px', textAlign: 'right', fontWeight: '700', color: '#0f172a', fontFamily: 'monospace' }}>
-                        {isAbove5 ? `₹${pricePerMember}` : 'મફત'}
+                      <td style={{ padding: '6px 8px', textAlign: 'center', fontWeight: '700', color: '#0f172a' }}>
+                        {isAbove5 ? (
+                          isBus ? (
+                            <div>
+                              <div style={{ fontWeight: '800', fontSize: '15px', color: '#0f172a', lineHeight: '1.2' }}>₹300</div>
+                              <div style={{ fontSize: '11px', color: '#475569', marginTop: '1px', whiteSpace: 'nowrap' }}>ફી ₹100 + બસ ₹200</div>
+                            </div>
+                          ) : (
+                            <div>
+                              <div style={{ fontWeight: '800', fontSize: '15px', color: '#0f172a', lineHeight: '1.2' }}>₹100</div>
+                              <div style={{ fontSize: '11px', color: '#475569', marginTop: '1px' }}>(સભ્ય ફી)</div>
+                            </div>
+                          )
+                        ) : (
+                          <div style={{ fontWeight: '800', fontSize: '14px', color: '#059669' }}>
+                            મફત (₹0)
+                          </div>
+                        )}
                       </td>
                     </tr>
                   );
@@ -429,65 +465,63 @@ export const SuccessModal = ({
           </div>
 
           {/* Fee Summary */}
-          <div style={{ borderTop: '1px solid #cbd5e1', borderBottom: '1px solid #cbd5e1', padding: '10px 0', marginBottom: '14px', fontSize: '12px', lineHeight: '1.6' }}>
+          <div style={{ borderTop: '1px solid #cbd5e1', borderBottom: '1px solid #cbd5e1', padding: '8px 0', marginBottom: '10px', fontSize: '14px', lineHeight: '1.5' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', color: '#334155' }}>
               <span>કુલ સભ્યો:</span>
               <strong style={{ color: '#0f172a' }}>{memberCount} વ્યક્તિ</strong>
             </div>
             <div style={{ display: 'flex', justifyContent: 'space-between', color: '#334155' }}>
-              <span>૫ વર્ષથી મોટી ઉંમરના સભ્યો (ચાર્જપાત્ર):</span>
-              <strong style={{ color: '#0f172a' }}>{chargeableCount} × ₹{pricePerMember} = ₹{chargeableCount * pricePerMember}</strong>
+              <span>સભ્ય ફી (૫ વર્ષથી મોટા - ₹{pricePerMember} × {chargeableCount}):</span>
+              <strong style={{ color: '#0f172a' }}>₹{memberFeeTotal}</strong>
             </div>
+            {isBus && (
+              <div style={{ display: 'flex', justifyContent: 'space-between', color: '#334155' }}>
+                <span>બસ ભાડું (૫ વર્ષથી મોટા - ₹{busFare} × {chargeableCount}):</span>
+                <strong style={{ color: '#0f172a' }}>₹{busFeeTotal}</strong>
+              </div>
+            )}
             {freeKidsCount > 0 && (
-              <div style={{ display: 'flex', justifyContent: 'space-between', color: '#475569' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', color: '#059669', fontWeight: '600' }}>
                 <span>૫ વર્ષ કે તેથી નાના બાળકો (મફત):</span>
                 <span>{freeKidsCount} બાળકો (₹૦)</span>
               </div>
             )}
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingTop: '6px', marginTop: '4px', borderTop: '1px solid #e2e8f0', fontSize: '13px' }}>
-              <strong style={{ color: '#0f172a' }}>કુલ ચૂકવવાપાત્ર રકમ (યાત્રા ફી):</strong>
-              <strong style={{ fontSize: '16px', color: '#0f172a', fontFamily: 'monospace' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingTop: '5px', marginTop: '3px', borderTop: '1px solid #e2e8f0' }}>
+              <strong style={{ color: '#0f172a', fontSize: '15px' }}>કુલ ચૂકવવાપાત્ર રકમ:</strong>
+              <strong style={{ fontSize: '19px', color: '#0f172a', fontFamily: 'monospace', fontWeight: '900' }}>
                 ₹{totalAmount.toLocaleString('en-IN')}
               </strong>
             </div>
           </div>
 
-          {/* Payment Contact Notice */}
-          <div style={{ marginBottom: '14px', fontSize: '12px', lineHeight: '1.6' }}>
-            <div style={{ fontWeight: '800', color: '#0f172a' }}>
+          {/* Payment Contact Notice (Clean Simple Text, No Yellow Box) */}
+          <div style={{ 
+            marginBottom: '10px', 
+            fontSize: '14px', 
+            lineHeight: '1.5',
+            textAlign: 'center'
+          }}>
+            <div style={{ fontWeight: '800', color: '#0f172a', fontSize: '14px' }}>
               📌 તા. 16 - 09 - 2026 પહેલાં રસીદના રૂપિયા અલ્પેશભાઈ વેગડ પાસે જમા કરાવી દેવા.
             </div>
-            <div style={{ fontWeight: '700', color: '#334155', marginTop: '2px' }}>
-              કોન્ટેક્ટ નંબર : <strong style={{ color: '#0f172a', fontFamily: 'monospace', fontSize: '13px' }}>76003 12101</strong>
+            <div style={{ fontWeight: '700', color: '#334155', marginTop: '2px', fontSize: '14px' }}>
+              કોન્ટેક્ટ નંબર : <strong style={{ color: '#0f172a', fontFamily: 'monospace', fontSize: '15px' }}>76003 12101</strong>
             </div>
           </div>
 
-          {/* Important Instructions */}
-          <div style={{ borderTop: '1px dashed #cbd5e1', paddingTop: '10px', marginBottom: '16px', fontSize: '11px', lineHeight: '1.6', color: '#334155' }}>
-            <div style={{ fontWeight: '800', color: '#0f172a', marginBottom: '4px' }}>
-              અગત્યની સૂચનાઓ:
-            </div>
-            <div style={{ fontWeight: '700', color: '#991b1b', marginBottom: '3px' }}>
-              ૧. રસીદના રૂપિયા જમા થયા વગર તે રસીદનું કન્ફર્મેશન કરવામાં આવશે નહીં. તેની સૌએ ખાસ નોંધ લેવી.
-            </div>
-            <div style={{ marginBottom: '2px' }}>
-              ૨. નાના બાળકોની જવાબદારી તેના માતા - પિતાની રહેશે.
-            </div>
-            <div>
-              ૩. જોથાણ થી બસની વ્યવસ્થા કરેલી છે, તેમાં બસભાડુ – ₹૨૦૦/- પ્રતિ વ્યક્તિ રહેશે.
-            </div>
-          </div>
-
-          {/* Official Signature / Seal */}
-          <div style={{ borderTop: '1px solid #0f172a', paddingTop: '10px', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', fontSize: '11px', color: '#475569' }}>
-            <div>
-              <div style={{ fontWeight: '800', color: '#0f172a', fontSize: '12px' }}>✓ સત્તાવાર મહોર (Verified)</div>
-              <div style={{ fontSize: '10px', color: '#64748b' }}>શ્રી બ્રહ્માનંદ સત્સંગ યાત્રા કમિટી ૨૦૨૬</div>
-            </div>
-            <div style={{ textAlign: 'right' }}>
-              <div style={{ fontWeight: '800', color: '#0f172a', fontSize: '12px' }}>કમિટી પ્રતિનિધિ</div>
-              <div style={{ fontSize: '10px', color: '#64748b' }}>સત્તાવાર નોંધણી</div>
-            </div>
+          {/* Important Warning Notice Box */}
+          <div style={{ 
+            border: '1.5px solid #fca5a5', 
+            backgroundColor: '#fef2f2', 
+            borderRadius: '8px', 
+            padding: '8px 12px', 
+            color: '#991b1b', 
+            fontWeight: '800', 
+            fontSize: '13px', 
+            lineHeight: '1.5',
+            textAlign: 'center'
+          }}>
+            ⚠️ તા. 16 - 09 - 2026 પહેલાં યાત્રાના પૈસા જે હરિભક્તે જમા નહીં કરાવ્યા હોય એમને યાત્રામાં લઈ જવામાં આવશે નહીં.
           </div>
 
         </div>

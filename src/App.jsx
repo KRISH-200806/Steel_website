@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
-import { 
-  CheckCircle2, 
-  AlertCircle, 
-  Loader2, 
+import {
+  CheckCircle2,
+  AlertCircle,
+  Loader2,
   Lock,
   Users,
   Bus,
@@ -27,7 +27,7 @@ export default function App() {
   const [primaryGender, setPrimaryGender] = useState('');
   const [mobileNumber, setMobileNumber] = useState('');
   const [transportMode, setTransportMode] = useState(''); // 'Bus (Jothan)' | 'Own Vehicle'
-  
+
   // Additional Accompanying Members State (Member 2, 3, etc.)
   const [additionalMembers, setAdditionalMembers] = useState([]);
 
@@ -78,6 +78,7 @@ export default function App() {
   // Pricing constants
   const feePerMember = config.feePerMember || 100;
   const busFare = config.busFare || 200;
+  const isBus = transportMode === 'Bus (Jothan)';
 
   // Build unified member list (Primary Person + Additional Members)
   const allMembersList = [
@@ -114,7 +115,11 @@ export default function App() {
 
   const chargeableCount = (isPrimaryChargeable ? 1 : 0) + addChargeableCount;
   const freeKidsCount = (isPrimaryFree ? 1 : 0) + addFreeCount;
-  const totalPayableAmount = chargeableCount * feePerMember;
+
+  // Separate Fee Calculations (Only for age > 5)
+  const memberFeeTotal = chargeableCount * feePerMember;
+  const busFeeTotal = isBus ? (chargeableCount * busFare) : 0;
+  const totalPayableAmount = memberFeeTotal + busFeeTotal;
 
   // Form Validation in Gujarati
   const validateForm = () => {
@@ -206,7 +211,7 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-[#f1f5f9] text-slate-800 font-sans antialiased pb-12">
-      
+
       {/* Header Bar */}
       <header className="bg-white border-b border-slate-200 sticky top-0 z-30 shadow-xs">
         <div className="max-w-2xl mx-auto px-4 h-16 flex items-center justify-between">
@@ -224,27 +229,29 @@ export default function App() {
             </div>
           </div>
           <span className="text-[11px] font-bold text-emerald-800 bg-emerald-50 px-2.5 py-1 rounded-lg border border-emerald-200">
-            સત્તાવાર નોંધણી
+            નોંધણી પોર્ટલ
           </span>
         </div>
       </header>
 
       {/* Main Content */}
       <main className="max-w-2xl mx-auto px-4 pt-5">
-        
+
         {submissionResult ? (
           <SuccessModal
             result={submissionResult}
-            formData={{ 
-              primaryName, 
-              primaryAge, 
-              primaryGender, 
-              mobileNumber, 
-              transportMode, 
-              members: allMembersList, 
+            formData={{
+              primaryName,
+              primaryAge,
+              primaryGender,
+              mobileNumber,
+              transportMode,
+              members: allMembersList,
               totalMembers: totalMembersCount,
               chargeableCount,
               freeKidsCount,
+              memberFeeTotal,
+              busFeeTotal,
               totalAmount: totalPayableAmount
             }}
             config={config}
@@ -252,37 +259,8 @@ export default function App() {
           />
         ) : (
           <div>
-            {/* Payment Deadline & Important Notice Banner */}
-            <div className="bg-amber-50 border-2 border-amber-400 rounded-2xl p-4 sm:p-5 mb-5 shadow-sm space-y-2">
-              <div className="flex items-start gap-3">
-                <div className="w-8 h-8 rounded-xl bg-amber-500 text-white flex items-center justify-center flex-shrink-0 shadow-xs mt-0.5">
-                  <AlertCircle className="w-5 h-5" />
-                </div>
-                <div className="space-y-1.5 flex-1">
-                  <p className="font-extrabold text-amber-950 text-xs sm:text-sm leading-snug">
-                    📌 તા. 16 - 09 - 2026 પહેલાં રસીદના રૂપિયા અલ્પેશભાઈ વેગડ પાસે જમા કરાવી દેવા.
-                  </p>
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs font-bold text-amber-900 flex items-center gap-1">
-                      <PhoneCall className="w-3.5 h-3.5 text-amber-700" />
-                      કોન્ટેક્ટ નંબર :
-                    </span>
-                    <a 
-                      href="tel:7600312101" 
-                      className="font-mono text-xs sm:text-sm font-extrabold text-amber-950 bg-white px-2 py-0.5 rounded border border-amber-300 shadow-2xs hover:bg-amber-100"
-                    >
-                      76003 12101
-                    </a>
-                  </div>
-                  <p className="text-[11px] font-bold text-rose-700 pt-0.5">
-                    ⚠️ રસીદના રૂપિયા જમા થયા વગર તે રસીદનું કન્ફર્મેશન કરવામાં આવશે નહીં. તેની સૌએ ખાસ નોંધ લેવી.
-                  </p>
-                </div>
-              </div>
-            </div>
-
             <form onSubmit={handleSubmit} noValidate className="space-y-5">
-              
+
               {/* SECTION 1: મુખ્ય વ્યક્તિની વિગતો */}
               <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 sm:p-6">
                 <div className="flex items-center justify-between pb-3 mb-4 border-b border-slate-100">
@@ -311,9 +289,8 @@ export default function App() {
                         setPrimaryName(e.target.value);
                         if (errors.primaryName) setErrors(prev => ({ ...prev, primaryName: null }));
                       }}
-                      className={`w-full px-3.5 py-2.5 bg-white border rounded-xl text-sm font-medium text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 ${
-                        errors.primaryName ? 'border-rose-300 bg-rose-50/20' : 'border-slate-300 focus:border-emerald-500'
-                      }`}
+                      className={`w-full px-3.5 py-2.5 bg-white border rounded-xl text-sm font-medium text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 ${errors.primaryName ? 'border-rose-300 bg-rose-50/20' : 'border-slate-300 focus:border-emerald-500'
+                        }`}
                     />
                     {errors.primaryName && <p className="text-xs font-semibold text-rose-600 mt-1">{errors.primaryName}</p>}
                   </div>
@@ -326,10 +303,11 @@ export default function App() {
                           ઉંમર (વર્ષ) <span className="text-rose-500">*</span>
                         </label>
                         {primaryAge && (
-                          <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${
-                            Number(primaryAge) > 5 ? 'bg-emerald-100 text-emerald-800' : 'bg-teal-100 text-teal-800'
-                          }`}>
-                            {Number(primaryAge) > 5 ? `₹${feePerMember}` : 'મફત (₹૦)'}
+                          <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${Number(primaryAge) > 5 ? 'bg-emerald-100 text-emerald-800' : 'bg-teal-100 text-teal-800'
+                            }`}>
+                            {Number(primaryAge) > 5 
+                              ? (isBus ? `₹${feePerMember + busFare} (ફી ₹${feePerMember} + બસ ₹${busFare})` : `₹${feePerMember}`) 
+                              : 'મફત (₹૦)'}
                           </span>
                         )}
                       </div>
@@ -343,9 +321,8 @@ export default function App() {
                           setPrimaryAge(e.target.value);
                           if (errors.primaryAge) setErrors(prev => ({ ...prev, primaryAge: null }));
                         }}
-                        className={`w-full px-3.5 py-2.5 bg-white border rounded-xl text-sm font-medium text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 ${
-                          errors.primaryAge ? 'border-rose-300 bg-rose-50/20' : 'border-slate-300 focus:border-emerald-500'
-                        }`}
+                        className={`w-full px-3.5 py-2.5 bg-white border rounded-xl text-sm font-medium text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 ${errors.primaryAge ? 'border-rose-300 bg-rose-50/20' : 'border-slate-300 focus:border-emerald-500'
+                          }`}
                       />
                       {errors.primaryAge && <p className="text-xs font-semibold text-rose-600 mt-1">{errors.primaryAge}</p>}
                     </div>
@@ -360,9 +337,8 @@ export default function App() {
                           setPrimaryGender(e.target.value);
                           if (errors.primaryGender) setErrors(prev => ({ ...prev, primaryGender: null }));
                         }}
-                        className={`w-full px-3.5 py-2.5 bg-white border rounded-xl text-sm font-medium text-slate-900 focus:outline-none focus:ring-2 ${
-                          errors.primaryGender ? 'border-rose-300 bg-rose-50/20' : 'border-slate-300 focus:border-emerald-500'
-                        }`}
+                        className={`w-full px-3.5 py-2.5 bg-white border rounded-xl text-sm font-medium text-slate-900 focus:outline-none focus:ring-2 ${errors.primaryGender ? 'border-rose-300 bg-rose-50/20' : 'border-slate-300 focus:border-emerald-500'
+                          }`}
                       >
                         <option value="">જાતિ પસંદ કરો</option>
                         <option value="Male">પુરુષ</option>
@@ -408,7 +384,7 @@ export default function App() {
                     <label className="block text-xs sm:text-sm font-semibold text-slate-800 mb-1">
                       મુસાફરીનું માધ્યમ (વાહનની વિગત) <span className="text-rose-500">*</span>
                     </label>
-                    
+
                     <div className="p-3 bg-blue-50/80 border border-blue-200 rounded-xl mb-3 flex items-start gap-2">
                       <Bus className="w-4 h-4 text-blue-700 mt-0.5 flex-shrink-0" />
                       <p className="text-xs text-blue-950 font-bold leading-relaxed">
@@ -417,16 +393,15 @@ export default function App() {
                     </div>
 
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                      <label 
+                      <label
                         onClick={() => {
                           setTransportMode('Bus (Jothan)');
                           if (errors.transportMode) setErrors(prev => ({ ...prev, transportMode: null }));
                         }}
-                        className={`flex items-center gap-3 p-3.5 rounded-xl border-2 cursor-pointer transition-all ${
-                          transportMode === 'Bus (Jothan)' 
-                            ? 'bg-emerald-50/90 border-emerald-600 shadow-xs' 
-                            : 'bg-white border-slate-200 hover:border-slate-300'
-                        }`}
+                        className={`flex items-center gap-3 p-3.5 rounded-xl border-2 cursor-pointer transition-all ${transportMode === 'Bus (Jothan)'
+                          ? 'bg-emerald-50/90 border-emerald-600 shadow-xs'
+                          : 'bg-white border-slate-200 hover:border-slate-300'
+                          }`}
                       >
                         <input
                           type="radio"
@@ -445,16 +420,15 @@ export default function App() {
                         </div>
                       </label>
 
-                      <label 
+                      <label
                         onClick={() => {
                           setTransportMode('Own Vehicle');
                           if (errors.transportMode) setErrors(prev => ({ ...prev, transportMode: null }));
                         }}
-                        className={`flex items-center gap-3 p-3.5 rounded-xl border-2 cursor-pointer transition-all ${
-                          transportMode === 'Own Vehicle' 
-                            ? 'bg-emerald-50/90 border-emerald-600 shadow-xs' 
-                            : 'bg-white border-slate-200 hover:border-slate-300'
-                        }`}
+                        className={`flex items-center gap-3 p-3.5 rounded-xl border-2 cursor-pointer transition-all ${transportMode === 'Own Vehicle'
+                          ? 'bg-emerald-50/90 border-emerald-600 shadow-xs'
+                          : 'bg-white border-slate-200 hover:border-slate-300'
+                          }`}
                       >
                         <input
                           type="radio"
@@ -508,7 +482,7 @@ export default function App() {
                         className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition-all shadow-xs cursor-pointer"
                       >
                         <Plus className="w-4 h-4" />
-                        <span>+ અન્ય સભ્ય ઉમેરો</span>
+                        <span>અન્ય સભ્ય ઉમેરો</span>
                       </button>
                     </div>
                   ) : (
@@ -530,13 +504,14 @@ export default function App() {
                                   સભ્ય {index + 2}
                                 </span>
                               </div>
-                              
+
                               <div className="flex items-center gap-2">
                                 {hasAge && (
-                                  <span className={`text-[11px] font-bold px-2 py-0.5 rounded-md ${
-                                    isChargeable ? 'bg-emerald-100 text-emerald-900' : 'bg-teal-100 text-teal-900'
-                                  }`}>
-                                    {isChargeable ? `ચાર્જ: ₹${feePerMember}` : '👶 મફત (₹૦)'}
+                                  <span className={`text-[11px] font-bold px-2 py-0.5 rounded-md ${isChargeable ? 'bg-emerald-100 text-emerald-900' : 'bg-teal-100 text-teal-900'
+                                    }`}>
+                                    {isChargeable 
+                                      ? (isBus ? `ચાર્જ: ₹${feePerMember + busFare} (ફી ₹${feePerMember} + બસ ₹${busFare})` : `ચાર્જ: ₹${feePerMember}`) 
+                                      : '👶 મફત (₹૦)'}
                                   </span>
                                 )}
                                 <button
@@ -559,9 +534,8 @@ export default function App() {
                                 placeholder="સભ્યનું પૂરું નામ લખો"
                                 value={member.name}
                                 onChange={(e) => handleMemberFieldChange(index, 'name', e.target.value)}
-                                className={`w-full px-3 py-2 bg-white border rounded-xl text-sm font-medium text-slate-900 placeholder:text-slate-400 focus:outline-none ${
-                                  mErr.name ? 'border-rose-300 bg-rose-50/20' : 'border-slate-300 focus:border-emerald-500'
-                                }`}
+                                className={`w-full px-3 py-2 bg-white border rounded-xl text-sm font-medium text-slate-900 placeholder:text-slate-400 focus:outline-none ${mErr.name ? 'border-rose-300 bg-rose-50/20' : 'border-slate-300 focus:border-emerald-500'
+                                  }`}
                               />
                               {mErr.name && <p className="text-[11px] font-semibold text-rose-600 mt-0.5">{mErr.name}</p>}
                             </div>
@@ -578,9 +552,8 @@ export default function App() {
                                   placeholder="ઉંમર"
                                   value={member.age}
                                   onChange={(e) => handleMemberFieldChange(index, 'age', e.target.value)}
-                                  className={`w-full px-3 py-2 bg-white border rounded-xl text-sm font-medium text-slate-900 placeholder:text-slate-400 focus:outline-none ${
-                                    mErr.age ? 'border-rose-300 bg-rose-50/20' : 'border-slate-300 focus:border-emerald-500'
-                                  }`}
+                                  className={`w-full px-3 py-2 bg-white border rounded-xl text-sm font-medium text-slate-900 placeholder:text-slate-400 focus:outline-none ${mErr.age ? 'border-rose-300 bg-rose-50/20' : 'border-slate-300 focus:border-emerald-500'
+                                    }`}
                                 />
                                 {mErr.age && <p className="text-[11px] font-semibold text-rose-600 mt-0.5">{mErr.age}</p>}
                               </div>
@@ -592,9 +565,8 @@ export default function App() {
                                 <select
                                   value={member.gender}
                                   onChange={(e) => handleMemberFieldChange(index, 'gender', e.target.value)}
-                                  className={`w-full px-3 py-2 bg-white border rounded-xl text-sm font-medium text-slate-900 focus:outline-none ${
-                                    mErr.gender ? 'border-rose-300 bg-rose-50/20' : 'border-slate-300 focus:border-emerald-500'
-                                  }`}
+                                  className={`w-full px-3 py-2 bg-white border rounded-xl text-sm font-medium text-slate-900 focus:outline-none ${mErr.gender ? 'border-rose-300 bg-rose-50/20' : 'border-slate-300 focus:border-emerald-500'
+                                    }`}
                                 >
                                   <option value="">જાતિ પસંદ કરો</option>
                                   <option value="Male">પુરુષ</option>
@@ -614,12 +586,42 @@ export default function App() {
                         className="w-full py-2.5 px-4 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer border border-slate-200"
                       >
                         <Plus className="w-4 h-4 text-emerald-600" />
-                        <span>+ વધુ સભ્ય ઉમેરો</span>
+                        <span>વધુ સભ્ય ઉમેરો</span>
                       </button>
                     </div>
                   )}
 
                 </div>
+              </div>
+
+              {/* SECTION 3: અગત્યની નોંધ */}
+              <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 sm:p-6 space-y-4">
+                <div className="flex items-center justify-between pb-3 mb-1 border-b border-slate-100">
+                  <h2 className="text-base sm:text-md font-bold text-slate-900 flex items-center gap-2">
+                    <span>અગત્યની નોંધ</span>
+                    <span className="text-xs font-bold bg-amber-100 text-amber-900 px-2 py-0.5 rounded">વિભાગ ૩ (૩ માંથી)</span>
+                  </h2>
+                </div>
+
+                <div className="space-y-3.5">
+                  <p className="text-base sm:text-md font-bold text-slate-900 leading-snug">
+                    📌 તા. 16 - 09 - 2026 પહેલાં રસીદના રૂપિયા અલ્પેશભાઈ વેગડ પાસે જમા કરાવી દેવા.
+                  </p>
+
+                  <div className="flex items-center gap-2 text-base sm:text-md font-bold text-slate-800">
+                    <PhoneCall className="w-5 h-5 text-slate-700 flex-shrink-0" />
+                    <span>કોન્ટેક્ટ નંબર :</span>
+                    <a
+                      href="tel:7600312101"
+                      className="font-mono text-base sm:text-md font-extrabold text-slate-950 hover:underline"
+                    >
+                      76003 12101
+                    </a>
+                  </div>
+
+                  <div className="p-4 bg-rose-50 border-2 border-rose-300 rounded-xl text-rose-700 font-bold text-base sm:text-md leading-snug shadow-xs">
+                    ⚠️ તા. 16 - 09 - 2026 પહેલાં યાત્રાના પૈસા જે હરિભક્તે જમા નહીં કરાવ્યા હોય એમને યાત્રામાં લઈ જવામાં આવશે નહીં.
+                  </div>                </div>
               </div>
 
               {/* SUBMIT BUTTON & LIVE PRICE SUMMARY BAR */}
@@ -630,15 +632,21 @@ export default function App() {
                 </div>
 
                 {/* Calculation Detail */}
-                <div className="space-y-1 text-xs text-slate-300 py-1">
+                <div className="space-y-1.5 text-xs text-slate-300 py-1">
                   <div className="flex items-center justify-between">
                     <span>કુલ નોંધાયેલા સભ્યો (મુખ્ય વ્યક્તિ સહિત):</span>
                     <strong className="text-white">{totalMembersCount} વ્યક્તિ</strong>
                   </div>
                   <div className="flex items-center justify-between">
-                    <span>૫ વર્ષથી મોટા સભ્યો (₹{feePerMember} પ્રતિ વ્યક્તિ):</span>
-                    <span className="text-emerald-400 font-bold">{chargeableCount} વ્યક્તિ = ₹{chargeableCount * feePerMember}</span>
+                    <span>સભ્ય ફી (૫ વર્ષથી મોટા - ₹{feePerMember} × {chargeableCount}):</span>
+                    <span className="text-emerald-400 font-bold">₹{memberFeeTotal}</span>
                   </div>
+                  {isBus && (
+                    <div className="flex items-center justify-between">
+                      <span>બસ ભાડું (૫ વર્ષથી મોટા - ₹{busFare} × {chargeableCount}):</span>
+                      <span className="text-emerald-400 font-bold">₹{busFeeTotal}</span>
+                    </div>
+                  )}
                   {freeKidsCount > 0 && (
                     <div className="flex items-center justify-between text-teal-300">
                       <span>૫ વર્ષ કે તેથી નાના બાળકો (મફત):</span>
@@ -653,7 +661,7 @@ export default function App() {
                       <Users className="w-5 h-5" />
                     </div>
                     <div>
-                      <p className="text-[11px] text-slate-400 font-semibold uppercase">કુલ ચૂકવવાપાત્ર રકમ (યાત્રા ફી)</p>
+                      <p className="text-[11px] text-slate-400 font-semibold uppercase">કુલ ચૂકવવાપાત્ર રકમ (યાત્રા ફી + બસ ભાડું)</p>
                       <p className="text-2xl font-black text-emerald-400 font-mono">
                         ₹{totalPayableAmount.toLocaleString('en-IN')}
                       </p>
@@ -667,9 +675,8 @@ export default function App() {
                 <button
                   type="submit"
                   disabled={isSubmitting}
-                  className={`w-full py-3.5 px-6 rounded-xl font-bold text-base shadow-lg transition-all flex items-center justify-center gap-2 cursor-pointer ${
-                    isSubmitting ? 'bg-slate-700 text-slate-400 cursor-not-allowed' : 'bg-emerald-500 hover:bg-emerald-600 text-white active:scale-[0.99]'
-                  }`}
+                  className={`w-full py-3.5 px-6 rounded-xl font-bold text-base shadow-lg transition-all flex items-center justify-center gap-2 cursor-pointer ${isSubmitting ? 'bg-slate-700 text-slate-400 cursor-not-allowed' : 'bg-emerald-500 hover:bg-emerald-600 text-white active:scale-[0.99]'
+                    }`}
                 >
                   {isSubmitting ? (
                     <>
