@@ -57,14 +57,14 @@ export const AdminDashboard = ({ onClose }) => {
     setIsLoadingData(true);
     try {
       const res = await fetchCloudRegistrations(config.googleScriptUrl);
-      if (res && Array.isArray(res.data) && res.data.length > 0) {
-        setRegistrations(res.data);
-        setDataSource(res.source);
+      if (res && res.success) {
+        setRegistrations(Array.isArray(res.data) ? res.data : []);
+        setDataSource('cloud');
         if (res.spreadsheetUrl) setSpreadsheetUrl(res.spreadsheetUrl);
       } else {
         const local = getStoredRegistrations();
         setRegistrations(local);
-        setDataSource('local');
+        setDataSource(res?.source || 'local');
       }
     } catch (e) {
       console.error("Data load error:", e);
@@ -216,10 +216,15 @@ export const AdminDashboard = ({ onClose }) => {
               <h1 className="font-bold text-base sm:text-lg text-white tracking-tight">
                 Picnic Management Admin
               </h1>
-              {dataSource === 'cloud' ? (
+              {isLoadingData ? (
+                <span className="text-[11px] px-2.5 py-0.5 rounded-full bg-blue-500/20 text-blue-300 font-semibold border border-blue-500/30 flex items-center gap-1">
+                  <Loader2 className="w-3 h-3 animate-spin text-blue-400" />
+                  <span>Connecting...</span>
+                </span>
+              ) : dataSource === 'cloud' ? (
                 <span className="text-[11px] px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 font-semibold border border-emerald-500/30 flex items-center gap-1">
                   <Cloud className="w-3 h-3 text-emerald-400" />
-                  <span>Google Sheets Synced</span>
+                  <span>Google Sheets Live</span>
                 </span>
               ) : (
                 <span className="text-[11px] px-2.5 py-0.5 rounded-full bg-amber-500/20 text-amber-300 font-semibold border border-amber-500/30">
