@@ -57,12 +57,12 @@ export const fetchCloudRegistrations = async (customUrl) => {
     if (response.ok) {
       const result = await response.json();
       if (Array.isArray(result.registrations)) {
-        return { 
-          success: true, 
-          data: result.registrations, 
+        return {
+          success: true,
+          data: result.registrations,
           total: result.totalRegistrations,
           spreadsheetUrl: result.spreadsheetUrl,
-          source: 'cloud' 
+          source: 'cloud'
         };
       }
     }
@@ -135,16 +135,16 @@ export const submitRegistration = async (formData) => {
   const chargeableCount = formData.chargeableCount !== undefined
     ? formData.chargeableCount
     : membersList.filter(m => {
-        const age = Number(m.age);
-        return !isNaN(age) && age > 5;
-      }).length;
+      const age = Number(m.age);
+      return !isNaN(age) && age > 5;
+    }).length;
 
   const freeKidsCount = formData.freeKidsCount !== undefined
     ? formData.freeKidsCount
     : membersList.filter(m => {
-        const age = Number(m.age);
-        return !isNaN(age) && age > 0 && age <= 5;
-      }).length;
+      const age = Number(m.age);
+      return !isNaN(age) && age > 0 && age <= 5;
+    }).length;
 
   const memberFeeTotal = formData.memberFeeTotal !== undefined
     ? formData.memberFeeTotal
@@ -327,20 +327,20 @@ export const exportToCSV = (registrations) => {
     const transportValue = `"${r.transportMode || 'Bus (Jothan)'}"`;
     const isBus = (r.transportMode || '').includes('Bus');
     const members = r.members || [];
-    
-    const chargeable = r.chargeableCount !== undefined 
-      ? r.chargeableCount 
+
+    const chargeable = r.chargeableCount !== undefined
+      ? r.chargeableCount
       : members.filter(m => Number(m.age) > 5).length;
-      
-    const freeKids = r.freeKidsCount !== undefined 
-      ? r.freeKidsCount 
+
+    const freeKids = r.freeKidsCount !== undefined
+      ? r.freeKidsCount
       : members.filter(m => Number(m.age) > 0 && Number(m.age) <= 5).length;
 
     const memFee = r.memberFeeTotal !== undefined ? r.memberFeeTotal : (chargeable * 100);
     const bFee = r.busFeeTotal !== undefined ? r.busFeeTotal : (isBus ? chargeable * 200 : 0);
-      
-    const totalAmt = r.totalAmount !== undefined 
-      ? r.totalAmount 
+
+    const totalAmt = r.totalAmount !== undefined
+      ? r.totalAmount
       : (memFee + bFee);
 
     const row = [
@@ -455,20 +455,20 @@ export const exportToExcelFormatted = (registrations) => {
     const transportClass = isBus ? 'bg-bus' : 'bg-vehicle';
     const transportLabel = r.transportMode || 'Bus (Jothan)';
     const members = r.members || [];
-    
-    const chargeable = r.chargeableCount !== undefined 
-      ? r.chargeableCount 
+
+    const chargeable = r.chargeableCount !== undefined
+      ? r.chargeableCount
       : members.filter(m => Number(m.age) > 5).length;
-      
-    const freeKids = r.freeKidsCount !== undefined 
-      ? r.freeKidsCount 
+
+    const freeKids = r.freeKidsCount !== undefined
+      ? r.freeKidsCount
       : members.filter(m => Number(m.age) > 0 && Number(m.age) <= 5).length;
 
     const memFee = r.memberFeeTotal !== undefined ? r.memberFeeTotal : (chargeable * 100);
     const bFee = r.busFeeTotal !== undefined ? r.busFeeTotal : (isBus ? chargeable * 200 : 0);
-      
-    const totalAmt = r.totalAmount !== undefined 
-      ? r.totalAmount 
+
+    const totalAmt = r.totalAmount !== undefined
+      ? r.totalAmount
       : (memFee + bFee);
 
     tableHtml += `

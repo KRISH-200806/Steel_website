@@ -1,18 +1,18 @@
 import React, { useState, useEffect } from 'react';
-import { 
-  Shield, 
-  Search, 
-  Download, 
-  CheckCircle, 
-  Users, 
-  FileSpreadsheet, 
-  Settings, 
-  RefreshCw, 
-  ChevronDown, 
-  ChevronUp, 
-  KeyRound, 
-  Check, 
-  Link2, 
+import {
+  Shield,
+  Search,
+  Download,
+  CheckCircle,
+  Users,
+  FileSpreadsheet,
+  Settings,
+  RefreshCw,
+  ChevronDown,
+  ChevronUp,
+  KeyRound,
+  Check,
+  Link2,
   ArrowLeft,
   Bus,
   Car,
@@ -20,13 +20,13 @@ import {
   Loader2,
   Cloud
 } from 'lucide-react';
-import { 
-  getStoredRegistrations, 
+import {
+  getStoredRegistrations,
   fetchCloudRegistrations,
-  updatePaymentStatus, 
-  exportToCSV, 
-  exportToExcelFormatted, 
-  testGoogleScriptConnection 
+  updatePaymentStatus,
+  exportToCSV,
+  exportToExcelFormatted,
+  testGoogleScriptConnection
 } from '../services/submissionService';
 import { getActiveConfig, saveActiveConfig } from '../config/picnicConfig';
 
@@ -34,13 +34,13 @@ export const AdminDashboard = ({ onClose }) => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [pinInput, setPinInput] = useState('');
   const [pinError, setPinError] = useState('');
-  
+
   const [activeTab, setActiveTab] = useState('registrations'); // 'registrations' | 'settings'
   const [registrations, setRegistrations] = useState([]);
   const [isLoadingData, setIsLoadingData] = useState(false);
   const [dataSource, setDataSource] = useState('cloud');
   const [spreadsheetUrl, setSpreadsheetUrl] = useState('');
-  
+
   // Search & Filter state
   const [searchTerm, setSearchTerm] = useState('');
   const [transportFilter, setTransportFilter] = useState('ALL');
@@ -119,7 +119,7 @@ export const AdminDashboard = ({ onClose }) => {
   const busCount = registrations.filter(r => (r.transportMode || '').includes('Bus')).length;
   const vehicleCount = registrations.filter(r => (r.transportMode || '') === 'Own Vehicle').length;
   const busMemberCount = registrations.filter(r => (r.transportMode || '').includes('Bus')).reduce((acc, r) => acc + (Number(r.totalMembers) || (r.members ? r.members.length : 1)), 0);
-  
+
   // Total Collection based on Age > 5
   const totalCollectionAmount = registrations.reduce((acc, r) => {
     if (r.totalAmount !== undefined) return acc + Number(r.totalAmount);
@@ -133,7 +133,7 @@ export const AdminDashboard = ({ onClose }) => {
   // Filter logic
   const filteredRegistrations = registrations.filter(r => {
     const searchLower = searchTerm.toLowerCase();
-    const matchesSearch = 
+    const matchesSearch =
       (r.primaryName || '').toLowerCase().includes(searchLower) ||
       (r.mobileNumber || '').includes(searchLower) ||
       (r.registrationId || '').toLowerCase().includes(searchLower) ||
@@ -204,7 +204,7 @@ export const AdminDashboard = ({ onClose }) => {
   // Full Screen Admin Dashboard
   return (
     <div className="fixed inset-0 z-50 bg-[#f1f5f9] flex flex-col w-screen h-screen overflow-hidden">
-      
+
       {/* Top Header Bar */}
       <header className="bg-slate-900 text-white px-5 sm:px-8 py-3.5 flex flex-wrap items-center justify-between gap-4 border-b border-slate-800 flex-shrink-0">
         <div className="flex items-center gap-3">
@@ -238,17 +238,15 @@ export const AdminDashboard = ({ onClose }) => {
           <div className="flex bg-slate-800 p-1 rounded-xl border border-slate-700 text-xs font-semibold">
             <button
               onClick={() => setActiveTab('registrations')}
-              className={`px-3.5 py-1.5 rounded-lg transition-all ${
-                activeTab === 'registrations' ? 'bg-emerald-600 text-white shadow-xs' : 'text-slate-400 hover:text-white'
-              }`}
+              className={`px-3.5 py-1.5 rounded-lg transition-all ${activeTab === 'registrations' ? 'bg-emerald-600 text-white shadow-xs' : 'text-slate-400 hover:text-white'
+                }`}
             >
               Registrations ({totalRegistrations})
             </button>
             <button
               onClick={() => setActiveTab('settings')}
-              className={`px-3.5 py-1.5 rounded-lg transition-all flex items-center gap-1.5 ${
-                activeTab === 'settings' ? 'bg-emerald-600 text-white shadow-xs' : 'text-slate-400 hover:text-white'
-              }`}
+              className={`px-3.5 py-1.5 rounded-lg transition-all flex items-center gap-1.5 ${activeTab === 'settings' ? 'bg-emerald-600 text-white shadow-xs' : 'text-slate-400 hover:text-white'
+                }`}
             >
               <Settings className="w-3.5 h-3.5" />
               <span>Settings</span>
@@ -269,11 +267,11 @@ export const AdminDashboard = ({ onClose }) => {
 
       {/* Main Full-Screen Content Area */}
       <main className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8">
-        
+
         {/* TAB 1: REGISTRATIONS */}
         {activeTab === 'registrations' && (
           <div className="max-w-[1700px] mx-auto space-y-5">
-            
+
             {/* KPI Stats Cards */}
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
               <div className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200/90 shadow-sm flex items-center gap-3.5">
@@ -321,7 +319,7 @@ export const AdminDashboard = ({ onClose }) => {
 
             {/* Filter & Export Toolbar */}
             <div className="bg-white p-4 rounded-2xl border border-slate-200/90 shadow-sm flex flex-col md:flex-row gap-3 items-center justify-between">
-              
+
               {/* Search Box */}
               <div className="relative w-full md:w-96">
                 <Search className="w-4 h-4 absolute left-3.5 top-3 text-slate-400" />
@@ -336,7 +334,7 @@ export const AdminDashboard = ({ onClose }) => {
 
               {/* Transportation Filter & Export Actions */}
               <div className="flex flex-wrap items-center gap-2 w-full md:w-auto justify-end">
-                
+
                 {/* Transport Filter */}
                 <select
                   value={transportFilter}
@@ -433,18 +431,18 @@ export const AdminDashboard = ({ onClose }) => {
                         const isExpanded = expandedRow === row.registrationId;
                         const members = row.members || [];
                         const isBus = (row.transportMode || '').includes('Bus');
-                        
+
                         const chargeable = row.chargeableCount !== undefined
                           ? row.chargeableCount
                           : members.filter(m => Number(m.age) > 5).length;
-                          
+
                         const freeKids = row.freeKidsCount !== undefined
                           ? row.freeKidsCount
                           : members.filter(m => Number(m.age) > 0 && Number(m.age) <= 5).length;
 
                         const memFee = row.memberFeeTotal !== undefined ? row.memberFeeTotal : (chargeable * (config.feePerMember || 100));
                         const bFee = row.busFeeTotal !== undefined ? row.busFeeTotal : (isBus ? chargeable * (config.busFare || 200) : 0);
-                          
+
                         const totalAmt = row.totalAmount !== undefined
                           ? row.totalAmount
                           : (memFee + bFee);
@@ -452,7 +450,7 @@ export const AdminDashboard = ({ onClose }) => {
                         return (
                           <React.Fragment key={row.registrationId}>
                             <tr className="hover:bg-slate-50/90 transition-colors">
-                              
+
                               {/* Reg ID */}
                               <td className="py-3.5 px-4 font-mono font-bold text-emerald-800">
                                 {row.registrationId}
@@ -549,18 +547,16 @@ export const AdminDashboard = ({ onClose }) => {
                                         const mAge = Number(m.age) || 0;
                                         const isChg = mAge > 5;
                                         return (
-                                          <div key={i} className={`p-2.5 rounded-lg border flex items-center justify-between ${
-                                            isChg ? 'bg-slate-50 border-slate-200' : 'bg-teal-50/50 border-teal-200'
-                                          }`}>
+                                          <div key={i} className={`p-2.5 rounded-lg border flex items-center justify-between ${isChg ? 'bg-slate-50 border-slate-200' : 'bg-teal-50/50 border-teal-200'
+                                            }`}>
                                             <div>
                                               <span className="font-bold text-slate-800 block">{i + 1}. {m.name}</span>
                                               <span className="text-slate-500 font-medium text-[11px]">{m.age} yrs • {m.gender}</span>
                                             </div>
-                                            <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${
-                                              isChg ? 'bg-emerald-100 text-emerald-900' : 'bg-teal-100 text-teal-800'
-                                            }`}>
-                                              {isChg 
-                                                ? (isBus ? `₹${(config.feePerMember || 100) + (config.busFare || 200)} (₹${config.feePerMember || 100}+₹${config.busFare || 200})` : `₹${config.feePerMember || 100}`) 
+                                            <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${isChg ? 'bg-emerald-100 text-emerald-900' : 'bg-teal-100 text-teal-800'
+                                              }`}>
+                                              {isChg
+                                                ? (isBus ? `₹${(config.feePerMember || 100) + (config.busFare || 200)} (₹${config.feePerMember || 100}+₹${config.busFare || 200})` : `₹${config.feePerMember || 100}`)
                                                 : 'Free (₹0)'}
                                             </span>
                                           </div>
@@ -595,7 +591,7 @@ export const AdminDashboard = ({ onClose }) => {
             </p>
 
             <form onSubmit={handleSaveSettings} className="space-y-5">
-              
+
               {/* Admin PIN */}
               <div>
                 <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
