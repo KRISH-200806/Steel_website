@@ -43,6 +43,38 @@ export const getStoredRegistrations = () => {
 };
 
 /**
+ * Fetch all registrations directly from Google Sheets Cloud Webhook
+ */
+export const fetchCloudRegistrations = async (customUrl) => {
+  const config = getActiveConfig();
+  const url = customUrl || config.googleScriptUrl;
+  if (!url || !url.startsWith("http")) {
+    return { success: false, data: getStoredRegistrations(), source: 'local' };
+  }
+
+  try {
+    const response = await fetch(url, { method: "GET" });
+    if (response.ok) {
+      const result = await response.json();
+      if (Array.isArray(result.registrations)) {
+        return { 
+          success: true, 
+          data: result.registrations, 
+          total: result.totalRegistrations,
+          spreadsheetUrl: result.spreadsheetUrl,
+          source: 'cloud' 
+        };
+      }
+    }
+  } catch (e) {
+    console.warn("Cloud sync note:", e);
+  }
+
+  // Fallback to local storage
+  return { success: false, data: getStoredRegistrations(), source: 'local' };
+};
+
+/**
  * Save a registration to browser LocalStorage
  */
 export const saveRegistrationLocally = (registration) => {

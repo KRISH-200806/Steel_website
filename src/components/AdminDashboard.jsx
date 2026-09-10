@@ -15,10 +15,14 @@ import {
   Link2, 
   ArrowLeft,
   Bus,
-  Car
+  Car,
+  ExternalLink,
+  Loader2,
+  Cloud
 } from 'lucide-react';
 import { 
   getStoredRegistrations, 
+  fetchCloudRegistrations,
   updatePaymentStatus, 
   exportToCSV, 
   exportToExcelFormatted, 
@@ -33,6 +37,9 @@ export const AdminDashboard = ({ onClose }) => {
   
   const [activeTab, setActiveTab] = useState('registrations'); // 'registrations' | 'settings'
   const [registrations, setRegistrations] = useState([]);
+  const [isLoadingData, setIsLoadingData] = useState(false);
+  const [dataSource, setDataSource] = useState('cloud');
+  const [spreadsheetUrl, setSpreadsheetUrl] = useState('');
   
   // Search & Filter state
   const [searchTerm, setSearchTerm] = useState('');
@@ -45,10 +52,27 @@ export const AdminDashboard = ({ onClose }) => {
   const [testingWebhook, setTestingWebhook] = useState(false);
   const [webhookTestResult, setWebhookTestResult] = useState(null);
 
-  // Load stored registrations
-  const loadData = () => {
-    const data = getStoredRegistrations();
-    setRegistrations(data);
+  // Load registrations from Google Sheets Cloud & fallback to LocalStorage
+  const loadData = async () => {
+    setIsLoadingData(true);
+    try {
+      const res = await fetchCloudRegistrations(config.googleScriptUrl);
+      if (res && Array.isArray(res.data) && res.data.length > 0) {
+        setRegistrations(res.data);
+        setDataSource(res.source);
+        if (res.spreadsheetUrl) setSpreadsheetUrl(res.spreadsheetUrl);
+      } else {
+        const local = getStoredRegistrations();
+        setRegistrations(local);
+        setDataSource('local');
+      }
+    } catch (e) {
+      console.error("Data load error:", e);
+      setRegistrations(getStoredRegistrations());
+      setDataSource('local');
+    } finally {
+      setIsLoadingData(false);
+    }
   };
 
   useEffect(() => {
@@ -192,9 +216,16 @@ export const AdminDashboard = ({ onClose }) => {
               <h1 className="font-bold text-base sm:text-lg text-white tracking-tight">
                 Picnic Management Admin
               </h1>
-              <span className="text-[11px] px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 font-semibold border border-emerald-500/30">
-                Live Active
-              </span>
+              {dataSource === 'cloud' ? (
+                <span className="text-[11px] px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 font-semibold border border-emerald-500/30 flex items-center gap-1">
+                  <Cloud className="w-3 h-3 text-emerald-400" />
+                  <span>Google Sheets Synced</span>
+                </span>
+              ) : (
+                <span className="text-[11px] px-2.5 py-0.5 rounded-full bg-amber-500/20 text-amber-300 font-semibold border border-amber-500/30">
+                  Local Device Mode
+                </span>
+              )}
             </div>
             <p className="text-xs text-slate-400 hidden sm:block">
               Registration Database, Bus/Vehicle Tracking & Age Fee Calculations
@@ -317,6 +348,20 @@ export const AdminDashboard = ({ onClose }) => {
                   <option value="VEHICLE">🚗 Own Vehicle ({vehicleCount})</option>
                 </select>
 
+                {/* Open Google Sheet Direct Link Button */}
+                {spreadsheetUrl && (
+                  <a
+                    href={spreadsheetUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-teal-600 hover:bg-teal-700 text-white font-bold text-xs shadow-sm transition-all"
+                    title="Open Live Google Sheet Spreadsheet"
+                  >
+                    <ExternalLink className="w-4 h-4" />
+                    <span>Google Sheet ↗</span>
+                  </a>
+                )}
+
                 {/* Export Excel Button */}
                 <button
                   onClick={() => exportToExcelFormatted(filteredRegistrations)}
@@ -340,10 +385,11 @@ export const AdminDashboard = ({ onClose }) => {
                 {/* Refresh Button */}
                 <button
                   onClick={loadData}
+                  disabled={isLoadingData}
                   className="p-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-600 transition-colors"
-                  title="Refresh Database"
+                  title="Refresh Database from Google Sheets"
                 >
-                  <RefreshCw className="w-4 h-4" />
+                  <RefreshCw className={`w-4 h-4 ${isLoadingData ? 'animate-spin text-emerald-600' : ''}`} />
                 </button>
 
               </div>
@@ -351,12 +397,18 @@ export const AdminDashboard = ({ onClose }) => {
 
             {/* Registrations Full Width Table */}
             <div className="bg-white rounded-2xl border border-slate-200/90 shadow-sm overflow-hidden">
-              {filteredRegistrations.length === 0 ? (
+              {isLoadingData ? (
+                <div className="p-16 text-center text-slate-500">
+                  <Loader2 className="w-10 h-10 mx-auto mb-3 animate-spin text-emerald-600" />
+                  <p className="font-bold text-slate-800 text-sm">Google Sheets માંથી ડેટા લોડ થઈ રહ્યો છે...</p>
+                  <p className="text-xs text-slate-400 mt-1">Syncing live registrations from cloud database</p>
+                </div>
+              ) : filteredRegistrations.length === 0 ? (
                 <div className="p-16 text-center text-slate-400">
                   <FileSpreadsheet className="w-12 h-12 mx-auto mb-3 opacity-30 text-slate-400" />
                   <p className="font-bold text-slate-700 text-base">No Registrations Found</p>
                   <p className="text-xs text-slate-400 mt-1">
-                    {searchTerm ? "Try searching with a different keyword or reset filters." : "New registrations will appear here in real-time."}
+                    {searchTerm ? "Try searching with a different keyword or reset filters." : "New registrations will appear here in real-time as users submit."}
                   </p>
                 </div>
               ) : (

@@ -23,8 +23,8 @@ export const DEFAULT_CONFIG = {
   // QR Code Image Path
   qrImageUrl: "/qr-code.jpeg",
   
-  // Google Sheets & Drive Webhook URL (LIVE CONNECTED!)
-  googleScriptUrl: "https://script.google.com/macros/s/AKfycby9aRUnG3yi8Gb9jZ4JSb6Jcf1dcFmeNo9peZiUkSDiKDd0jKeJ_YVXA3JvdfcAzylz/exec",
+  // Google Sheets Webhook URL (LIVE CONNECTED & TESTED!)
+  googleScriptUrl: "https://script.google.com/macros/s/AKfycbzLe7Ov18EYwyiIGF8NY_ja7pcDKKVyDegfqXnqjNJjThwjKWw-SGH1TEUMsJDwbSapjg/exec",
   
   // Registration ID Prefix
   idPrefix: "SBSY-2026-",
@@ -35,7 +35,7 @@ export const DEFAULT_CONFIG = {
 
 // Local storage key for persistent user customizations
 export const STORAGE_KEYS = {
-  CONFIG: "picnic_app_config_v4", // updated to v4 to guarantee new branding and settings take effect immediately
+  CONFIG: "picnic_app_config_v5", // updated to v5 so new webhook takes effect immediately for all users
   REGISTRATIONS: "picnic_app_registrations_v1"
 };
 

@@ -1,28 +1,22 @@
 /**
  * ==============================================================================
- * 1-DAY PICNIC 2026 - GOOGLE APPS SCRIPT BACKEND (EXCEL / GOOGLE SHEETS)
+ * શ્રી બ્રહ્માનંદ સત્સંગ યાત્રા - 2026 : GOOGLE APPS SCRIPT BACKEND
  * ==============================================================================
  * 
- * FEATURES:
- * 1. Automatically creates structured headers on first run.
- * 2. Uploads payment screenshot (Base64) to Google Drive folder ("Picnic_2026_Payment_Screenshots").
- * 3. Generates clickable viewable Google Drive screenshot URL in Column 11.
- * 4. Generates unique Registration ID (PIC-2026-0001, PIC-2026-0002...).
- * 5. Appends a new row for each registration without overwriting.
- * 6. Supports GET health check request.
+ * 1. Automatically initializes formatted columns in Google Sheets
+ * 2. Saves all member details, travel mode (Bus / Own Vehicle), ages, & fee breakdown
+ * 3. Works seamlessly without requiring Google login from website users
  * ==============================================================================
  */
 
-// Configuration Constants
 const SCRIPT_CONFIG = {
   SHEET_NAME: "Registrations",
-  DRIVE_FOLDER_NAME: "Picnic_2026_Payment_Screenshots",
-  ID_PREFIX: "PIC-2026-",
-  MAX_MEMBER_COLUMNS: 15 // Prepares columns for up to 15 members
+  ID_PREFIX: "SBSY-2026-",
+  MAX_MEMBER_COLUMNS: 15 // Up to 15 members columns
 };
 
 /**
- * Handle POST request from the web application
+ * Handle POST request from the website registration form
  */
 function doPost(e) {
   const lock = LockService.getScriptLock();
@@ -31,7 +25,7 @@ function doPost(e) {
   } catch (lockError) {
     return createJsonResponse({
       success: false,
-      message: "Server is busy processing another registration. Please try again in a moment."
+      message: "Server is busy. Please try again."
     });
   }
 
@@ -39,7 +33,7 @@ function doPost(e) {
     if (!e || !e.postData || !e.postData.contents) {
       return createJsonResponse({
         success: false,
-        message: "No POST data received."
+        message: "No data received."
       });
     }
 
@@ -47,43 +41,45 @@ function doPost(e) {
     const ss = SpreadsheetApp.getActiveSpreadsheet();
     let sheet = ss.getSheetByName(SCRIPT_CONFIG.SHEET_NAME);
     
-    // Create sheet if it does not exist
+    // Create sheet if missing
     if (!sheet) {
       sheet = ss.insertSheet(SCRIPT_CONFIG.SHEET_NAME);
     }
 
-    // Ensure headers exist
+    // Ensure table headers exist
     setupHeadersIfMissing(sheet);
 
-    // 1. Process & Save Payment Screenshot to Google Drive
-    let screenshotUrl = "No screenshot uploaded";
-    if (data.screenshotBase64) {
-      screenshotUrl = saveScreenshotToDrive(
-        data.screenshotBase64,
-        data.screenshotFileName || "payment_proof.jpg",
-        data.primaryName || "Picnic_Guest",
-        data.mobileNumber || "Phone"
-      );
-    } else if (data.paymentScreenshotUrl) {
-      screenshotUrl = data.paymentScreenshotUrl;
-    }
-
-    // 2. Generate or verify unique Registration ID
+    // 1. Generate / verify Registration ID
     const lastRow = sheet.getLastRow();
     const nextSeqNumber = Math.max(1, lastRow); // row 2 = 0001
     const generatedId = SCRIPT_CONFIG.ID_PREFIX + String(nextSeqNumber).padStart(4, '0');
     const registrationId = data.registrationId || generatedId;
 
-    // 3. Format Date & Time (Indian Standard Time)
+    // 2. Format Date & Time
     const timestamp = data.timestamp || Utilities.formatDate(new Date(), "Asia/Kolkata", "dd/MM/yyyy, hh:mm:ss a");
 
-    // 4. Construct Row Data (without Address, with ₹100 fee)
+    // 3. Process Members and Pricing
     const members = Array.isArray(data.members) ? data.members : [];
     const totalMembers = Number(data.totalMembers) || members.length || 1;
-    const pricePerMember = Number(data.pricePerMember) || 100;
-    const totalAmount = Number(data.totalAmount) || (totalMembers * pricePerMember);
-    const paymentStatus = data.paymentStatus || "Payment Screenshot Uploaded / Pending Verification";
+    const transportMode = data.transportMode || "Bus (Jothan)";
+    const isBus = transportMode.indexOf("Bus") > -1;
 
+    const chargeableCount = data.chargeableCount !== undefined 
+      ? Number(data.chargeableCount) 
+      : members.filter(function(m) { return Number(m.age) > 5; }).length;
+
+    const freeKidsCount = data.freeKidsCount !== undefined 
+      ? Number(data.freeKidsCount) 
+      : members.filter(function(m) { return Number(m.age) > 0 && Number(m.age) <= 5; }).length;
+
+    const feePerMember = Number(data.feePerMember) || 100;
+    const busFare = Number(data.busFare) || 200;
+    const memberFeeTotal = data.memberFeeTotal !== undefined ? Number(data.memberFeeTotal) : (chargeableCount * feePerMember);
+    const busFeeTotal = data.busFeeTotal !== undefined ? Number(data.busFeeTotal) : (isBus ? chargeableCount * busFare : 0);
+    const totalAmount = data.totalAmount !== undefined ? Number(data.totalAmount) : (memberFeeTotal + busFeeTotal);
+    const status = data.status || "Confirmed";
+
+    // 4. Build Row Data
     const rowData = [
       registrationId,
       timestamp,
@@ -91,54 +87,65 @@ function doPost(e) {
       data.primaryAge || "",
       data.primaryGender || "",
       "'" + String(data.mobileNumber || "").replace(/\D/g, ''),
+      transportMode,
       totalMembers,
-      pricePerMember,
+      chargeableCount,
+      freeKidsCount,
+      memberFeeTotal,
+      busFeeTotal,
       totalAmount,
-      paymentStatus,
-      screenshotUrl.startsWith("http") ? screenshotUrl : (screenshotUrl ? "Screenshot Uploaded" : "No screenshot")
+      status
     ];
 
-    // Append dynamic member columns
+    // Append member columns
     for (let i = 0; i < SCRIPT_CONFIG.MAX_MEMBER_COLUMNS; i++) {
       if (i < members.length) {
+        const mAge = Number(members[i].age) || 0;
+        const isChg = mAge > 5;
+        const mFee = isChg ? (isBus ? feePerMember + busFare : feePerMember) : 0;
+        
         rowData.push(members[i].name || "");
         rowData.push(members[i].age || "");
         rowData.push(members[i].gender || "");
+        rowData.push(mFee);
       } else {
         rowData.push(""); // Name
         rowData.push(""); // Age
         rowData.push(""); // Gender
+        rowData.push(""); // Fee
       }
     }
 
-    // 5. Append New Row
+    // 5. Append New Row to Google Sheet
     sheet.appendRow(rowData);
     const insertedRowIndex = sheet.getLastRow();
 
-    // Format row styling & hyperlink
+    // Style the new row
     try {
       const rowRange = sheet.getRange(insertedRowIndex, 1, 1, rowData.length);
       rowRange.setVerticalAlignment("middle");
       
-      // Highlight pending status
-      const statusCell = sheet.getRange(insertedRowIndex, 10);
-      statusCell.setBackground("#fef3c7").setFontColor("#92400e");
-      
-      // Screenshot cell clean clickable hyperlink
-      if (screenshotUrl.startsWith("http")) {
-        const screenshotCell = sheet.getRange(insertedRowIndex, 11);
-        screenshotCell.setFormula(`=HYPERLINK("${screenshotUrl}", "🔍 View Screenshot")`);
-        screenshotCell.setFontColor("#15803d").setFontLine("underline");
+      // Highlight transport & status
+      const transportCell = sheet.getRange(insertedRowIndex, 7);
+      if (isBus) {
+        transportCell.setBackground("#eff6ff").setFontColor("#1e40af").setFontWeight("bold");
+      } else {
+        transportCell.setBackground("#faf5ff").setFontColor("#6b21a8").setFontWeight("bold");
       }
+
+      const totalCell = sheet.getRange(insertedRowIndex, 13);
+      totalCell.setBackground("#ecfdf5").setFontColor("#047857").setFontWeight("bold");
+
+      const statusCell = sheet.getRange(insertedRowIndex, 14);
+      statusCell.setBackground("#d1fae5").setFontColor("#065f46").setFontWeight("bold");
     } catch (styleErr) {
-      Logger.log("Row styling notice: " + styleErr.toString());
+      Logger.log("Style note: " + styleErr.toString());
     }
 
     return createJsonResponse({
       success: true,
-      message: "Registration successfully recorded in Google Sheets!",
+      message: "Registration successfully recorded in Google Sheet!",
       registrationId: registrationId,
-      screenshotUrl: screenshotUrl,
       timestamp: timestamp,
       totalAmount: totalAmount
     });
@@ -155,28 +162,66 @@ function doPost(e) {
 }
 
 /**
- * Handle GET request (Health Check)
+ * Handle GET request (Fetch all registrations & Health Check)
  */
 function doGet(e) {
   try {
     const ss = SpreadsheetApp.getActiveSpreadsheet();
     let sheet = ss.getSheetByName(SCRIPT_CONFIG.SHEET_NAME);
     
-    if (!sheet) {
+    if (!sheet || sheet.getLastRow() <= 1) {
       return createJsonResponse({
         status: "active",
-        message: "Picnic 2026 Google Apps Script is running. Sheet will be initialized on first submission.",
-        totalRegistrations: 0
+        message: "Google Sheets is active and connected! No registrations yet.",
+        totalRegistrations: 0,
+        registrations: [],
+        spreadsheetName: ss ? ss.getName() : "",
+        spreadsheetUrl: ss ? ss.getUrl() : ""
       });
     }
 
     const lastRow = sheet.getLastRow();
-    const totalRegistrations = Math.max(0, lastRow - 1);
+    const lastCol = sheet.getLastColumn();
+    const values = sheet.getRange(2, 1, lastRow - 1, lastCol).getValues();
+
+    const registrations = values.map(function(row) {
+      const members = [];
+      // Dynamic member columns start at index 14 (Column 15: Name, Age, Gender, Fee)
+      for (let c = 14; c < row.length; c += 4) {
+        if (row[c] && String(row[c]).trim() !== "") {
+          members.push({
+            name: String(row[c]),
+            age: row[c + 1] !== undefined ? String(row[c + 1]) : "",
+            gender: row[c + 2] !== undefined ? String(row[c + 2]) : "",
+            fee: row[c + 3] !== undefined ? Number(row[c + 3]) : 0
+          });
+        }
+      }
+
+      return {
+        registrationId: String(row[0] || ""),
+        timestamp: String(row[1] || ""),
+        primaryName: String(row[2] || ""),
+        primaryAge: row[3] !== "" ? Number(row[3]) : "",
+        primaryGender: String(row[4] || ""),
+        mobileNumber: String(row[5] || "").replace(/'/g, ''),
+        transportMode: String(row[6] || "Bus (Jothan)"),
+        totalMembers: Number(row[7]) || members.length || 1,
+        chargeableCount: Number(row[8]) || 0,
+        freeKidsCount: Number(row[9]) || 0,
+        memberFeeTotal: Number(row[10]) || 0,
+        busFeeTotal: Number(row[11]) || 0,
+        totalAmount: Number(row[12]) || 0,
+        status: String(row[13] || "Confirmed"),
+        members: members
+      };
+    }).reverse(); // Newest first
 
     return createJsonResponse({
       status: "active",
-      message: "Picnic 2026 Google Apps Script Webhook is active and connected to Google Sheets!",
-      totalRegistrations: totalRegistrations,
+      message: "Google Sheets Webhook is active and connected!",
+      totalRegistrations: registrations.length,
+      registrations: registrations,
       spreadsheetName: ss.getName(),
       spreadsheetUrl: ss.getUrl()
     });
@@ -200,24 +245,28 @@ function setupHeadersIfMissing(sheet) {
       "Primary Age",
       "Primary Gender",
       "Mobile Number",
+      "Transportation Mode",
       "Total Members",
-      "Price Per Member (₹)",
+      "Chargeable (>5 yrs)",
+      "Free Kids (<=5 yrs)",
+      "Member Fee Total (₹)",
+      "Bus Fare Total (₹)",
       "Total Amount (₹)",
-      "Payment Status",
-      "Payment Screenshot URL"
+      "Status"
     ];
 
     for (let i = 1; i <= SCRIPT_CONFIG.MAX_MEMBER_COLUMNS; i++) {
       headers.push(`Member ${i} Name`);
       headers.push(`Member ${i} Age`);
       headers.push(`Member ${i} Gender`);
+      headers.push(`Member ${i} Fee (₹)`);
     }
 
     sheet.appendRow(headers);
 
     // Format Header Row
     const headerRange = sheet.getRange(1, 1, 1, headers.length);
-    headerRange.setBackground("#15803d") // Emerald Green
+    headerRange.setBackground("#047857") // Emerald 700
                .setFontColor("#ffffff")
                .setFontWeight("bold")
                .setHorizontalAlignment("center")
@@ -225,50 +274,11 @@ function setupHeadersIfMissing(sheet) {
     
     sheet.setFrozenRows(1);
     
-    // Auto resize first 11 columns
-    for (let col = 1; col <= 11; col++) {
+    for (let col = 1; col <= 14; col++) {
       try {
         sheet.autoResizeColumn(col);
       } catch (e) {}
     }
-  }
-}
-
-/**
- * Save Base64 encoded screenshot image to Google Drive folder
- */
-function saveScreenshotToDrive(base64Data, originalFileName, guestName, phone) {
-  try {
-    let folder;
-    const folders = DriveApp.getFoldersByName(SCRIPT_CONFIG.DRIVE_FOLDER_NAME);
-    if (folders.hasNext()) {
-      folder = folders.next();
-    } else {
-      folder = DriveApp.createFolder(SCRIPT_CONFIG.DRIVE_FOLDER_NAME);
-    }
-
-    let cleanBase64 = base64Data;
-    let contentType = "image/jpeg";
-
-    if (base64Data.indexOf(";base64,") > -1) {
-      const parts = base64Data.split(";base64,");
-      contentType = parts[0].replace("data:", "");
-      cleanBase64 = parts[1];
-    }
-
-    const decodedBlob = Utilities.newBlob(
-      Utilities.base64Decode(cleanBase64),
-      contentType,
-      `PicnicPay_${guestName.replace(/[^a-zA-Z0-9]/g, '_')}_${phone}_${Date.now()}.jpg`
-    );
-
-    const file = folder.createFile(decodedBlob);
-    file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
-
-    return `https://drive.google.com/uc?export=view&id=${file.getId()}`;
-  } catch (driveError) {
-    Logger.log("Drive save error: " + driveError.toString());
-    return "Error saving to Drive: " + driveError.message;
   }
 }
 
