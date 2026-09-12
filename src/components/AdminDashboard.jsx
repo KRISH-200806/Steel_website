@@ -18,7 +18,10 @@ import {
   Car,
   ExternalLink,
   Loader2,
-  Cloud
+  Cloud,
+  ListOrdered,
+  Wrench,
+  Sparkles
 } from 'lucide-react';
 import {
   getStoredRegistrations,
@@ -26,7 +29,8 @@ import {
   updatePaymentStatus,
   exportToCSV,
   exportToExcelFormatted,
-  testGoogleScriptConnection
+  testGoogleScriptConnection,
+  repairCloudSequence
 } from '../services/submissionService';
 import { getActiveConfig, saveActiveConfig } from '../config/picnicConfig';
 
@@ -46,11 +50,13 @@ export const AdminDashboard = ({ onClose }) => {
   const [transportFilter, setTransportFilter] = useState('ALL');
   const [expandedRow, setExpandedRow] = useState(null);
 
-  // Settings State
+  // Settings & Resequence State
   const [config, setConfig] = useState(getActiveConfig());
   const [settingsSaved, setSettingsSaved] = useState(false);
   const [testingWebhook, setTestingWebhook] = useState(false);
   const [webhookTestResult, setWebhookTestResult] = useState(null);
+  const [isResequencing, setIsResequencing] = useState(false);
+  const [resequenceResult, setResequenceResult] = useState(null);
 
   // Load registrations from Google Sheets Cloud & fallback to LocalStorage
   const loadData = async () => {
@@ -111,6 +117,32 @@ export const AdminDashboard = ({ onClose }) => {
     const res = await testGoogleScriptConnection(config.googleScriptUrl);
     setTestingWebhook(false);
     setWebhookTestResult(res);
+  };
+
+  // Resequence IDs in Google Sheet to guarantee continuous 0001, 0002, 0003...
+  const handleResequence = async () => {
+    const isConfirm = window.confirm(
+      "આ ફીચર Google Sheet માં બધા રજીસ્ટ્રેશન ID ને ક્રમબદ્ધ (SBSY-2026-0001, SBSY-2026-0002, SBSY-2026-0003...) નંબર આપીને સુધારશે.\n\nશું તમે આગળ વધવા માંગો છો?"
+    );
+    if (!isConfirm) return;
+
+    setIsResequencing(true);
+    setResequenceResult(null);
+    try {
+      const res = await repairCloudSequence(config.googleScriptUrl);
+      setResequenceResult(res);
+      await loadData();
+      if (res && res.success) {
+        alert(res.message || "બધા રજીસ્ટ્રેશન ID સફળતાપૂર્વક ક્રમબદ્ધ થઈ ગયા છે!");
+      } else {
+        alert("Resequence note: " + (res?.message || "Please update your Google Apps Script code to enable resequencing."));
+      }
+    } catch (e) {
+      setResequenceResult({ success: false, message: e.message });
+      alert("Error: " + e.message);
+    } finally {
+      setIsResequencing(false);
+    }
   };
 
   // Metrics Calculation
@@ -385,6 +417,21 @@ export const AdminDashboard = ({ onClose }) => {
                   <span>CSV (.csv)</span>
                 </button>
 
+                {/* Fix / Resequence IDs Button */}
+                <button
+                  onClick={handleResequence}
+                  disabled={isResequencing || isLoadingData}
+                  className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-300 font-bold text-xs shadow-xs transition-all"
+                  title="Resequence all IDs in Google Sheet (0001, 0002, 0003...)"
+                >
+                  {isResequencing ? (
+                    <Loader2 className="w-4 h-4 animate-spin text-amber-700" />
+                  ) : (
+                    <ListOrdered className="w-4 h-4 text-amber-700" />
+                  )}
+                  <span>{isResequencing ? "ફિક્સિંગ..." : "રી-સીક્વન્સ ID"}</span>
+                </button>
+
                 {/* Refresh Button */}
                 <button
                   onClick={loadData}
@@ -641,6 +688,35 @@ export const AdminDashboard = ({ onClose }) => {
                 {webhookTestResult && (
                   <div className={`p-2.5 rounded-xl text-xs mt-2 ${webhookTestResult.success ? 'bg-emerald-100 text-emerald-900' : 'bg-rose-100 text-rose-900'}`}>
                     {webhookTestResult.message}
+                  </div>
+                )}
+              </div>
+
+              {/* Continuous ID Resequence Card */}
+              <div className="p-4 bg-amber-50/70 rounded-2xl border border-amber-200 space-y-2">
+                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                  <div>
+                    <h4 className="text-xs font-bold text-amber-900 uppercase tracking-wider flex items-center gap-1.5">
+                      <ListOrdered className="w-4 h-4 text-amber-700" />
+                      <span>Continuous ID Resequencing (ક્રમબદ્ધ રજીસ્ટ્રેશન ID)</span>
+                    </h4>
+                    <p className="text-[11px] text-amber-800 mt-1">
+                      જો તારીખ બદલાવાથી અથવા અલગ ડિવાઇસથી ID 0001 પર રીસેટ થયો હોય, તો અહીંથી Google Sheet માં બધા રેકોર્ડ્સ 0001, 0002, 0003... ક્રમમાં ફિક્સ કરી શકાશે.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleResequence}
+                    disabled={isResequencing}
+                    className="inline-flex items-center gap-1.5 px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold rounded-xl shadow-xs flex-shrink-0 transition-all"
+                  >
+                    {isResequencing ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
+                    <span>{isResequencing ? "પ્રોસેસિંગ..." : "રી-સીક્વન્સ ફિક્સ કરો"}</span>
+                  </button>
+                </div>
+                {resequenceResult && (
+                  <div className={`p-2.5 rounded-xl text-xs mt-1 font-semibold ${resequenceResult.success ? 'bg-emerald-100 text-emerald-900 border border-emerald-300' : 'bg-rose-100 text-rose-900 border border-rose-300'}`}>
+                    {resequenceResult.message}
                   </div>
                 )}
               </div>

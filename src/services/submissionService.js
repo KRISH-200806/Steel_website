@@ -1,19 +1,81 @@
 import { STORAGE_KEYS, getActiveConfig } from '../config/picnicConfig';
 
 /**
- * Generate Unique Registration ID: PIC-2026-XXXX
+ * Helper to parse highest numeric sequence from a list of registrations
+ */
+export const getHighestSequenceNumber = (registrations = []) => {
+  let maxSeq = 0;
+  if (!Array.isArray(registrations)) return 0;
+
+  registrations.forEach(r => {
+    const idStr = String(r.registrationId || '').trim();
+    const match = idStr.match(/(\d+)$/);
+    if (match) {
+      const num = parseInt(match[1], 10);
+      if (!isNaN(num) && num > maxSeq) {
+        maxSeq = num;
+      }
+    }
+  });
+  return maxSeq;
+};
+
+/**
+ * Generate Unique Registration ID: SBSY-2026-XXXX
+ * Guaranteed to continue the sequence based on the highest existing number.
  */
 export const generateRegistrationId = () => {
   const config = getActiveConfig();
-  const prefix = config.idPrefix || "PIC-2026-";
+  const prefix = config.idPrefix || "SBSY-2026-";
   try {
     const existing = getStoredRegistrations();
-    const nextNum = existing.length + 1;
+    const maxNum = getHighestSequenceNumber(existing);
+    const nextNum = Math.max(maxNum + 1, existing.length + 1, 1);
     return `${prefix}${String(nextNum).padStart(4, '0')}`;
   } catch (e) {
     const random = Math.floor(1000 + Math.random() * 9000);
     return `${prefix}${random}`;
   }
+};
+
+/**
+ * Fetch guaranteed continuous Registration ID by querying cloud database first
+ */
+export const fetchNextSequentialRegistrationId = async () => {
+  const config = getActiveConfig();
+  const prefix = config.idPrefix || "SBSY-2026-";
+
+  try {
+    if (config.googleScriptUrl && config.googleScriptUrl.trim().startsWith("http")) {
+      // 1. Try fast getNextId endpoint
+      try {
+        const response = await fetch(`${config.googleScriptUrl}?action=getNextId`, { method: "GET" });
+        if (response.ok) {
+          const res = await response.json();
+          if (res && res.nextId) {
+            return res.nextId;
+          }
+        }
+      } catch (err) {
+        // Fallback to full cloud registrations fetch
+      }
+
+      // 2. Fetch cloud registrations list
+      const cloudRes = await fetchCloudRegistrations(config.googleScriptUrl);
+      if (cloudRes && cloudRes.success && Array.isArray(cloudRes.data)) {
+        const cloudMax = getHighestSequenceNumber(cloudRes.data);
+        const localMax = getHighestSequenceNumber(getStoredRegistrations());
+        const maxNum = Math.max(cloudMax, localMax);
+        const nextNum = maxNum + 1;
+        return `${prefix}${String(nextNum).padStart(4, '0')}`;
+      }
+    }
+  } catch (e) {
+    console.warn("Could not query next cloud ID:", e);
+  }
+
+  // Fallback to local continuous generator
+  return generateRegistrationId();
 };
 
 /**
@@ -57,6 +119,13 @@ export const fetchCloudRegistrations = async (customUrl) => {
     if (response.ok) {
       const result = await response.json();
       if (Array.isArray(result.registrations)) {
+        // Keep local storage in sync with cloud database
+        try {
+          localStorage.setItem(STORAGE_KEYS.REGISTRATIONS, JSON.stringify(result.registrations));
+        } catch (storageErr) {
+          console.warn("Local storage sync error:", storageErr);
+        }
+
         return {
           success: true,
           data: result.registrations,
@@ -75,12 +144,39 @@ export const fetchCloudRegistrations = async (customUrl) => {
 };
 
 /**
+ * Request Google Apps Script backend to resequence/repair all IDs in the Sheet (0001, 0002, 0003...)
+ */
+export const repairCloudSequence = async (customUrl) => {
+  const config = getActiveConfig();
+  const url = customUrl || config.googleScriptUrl;
+  if (!url || !url.startsWith("http")) {
+    return { success: false, message: "Google Sheet Webhook URL not configured." };
+  }
+
+  try {
+    const response = await fetch(`${url}?action=repairSequence`, { method: "GET" });
+    if (response.ok) {
+      const result = await response.json();
+      // After repairing cloud sequence, fetch latest data to update local storage
+      await fetchCloudRegistrations(url);
+      return result;
+    } else {
+      return { success: false, message: `Server error: ${response.status}` };
+    }
+  } catch (e) {
+    return { success: false, message: e.message };
+  }
+};
+
+/**
  * Save a registration to browser LocalStorage
  */
 export const saveRegistrationLocally = (registration) => {
   try {
     const existing = getStoredRegistrations();
-    const updated = [registration, ...existing];
+    // Avoid duplicate if already exists with same registrationId
+    const filtered = existing.filter(r => r.registrationId !== registration.registrationId);
+    const updated = [registration, ...filtered];
     localStorage.setItem(STORAGE_KEYS.REGISTRATIONS, JSON.stringify(updated));
     return true;
   } catch (e) {
@@ -111,11 +207,15 @@ export const updatePaymentStatus = (registrationId, newStatus) => {
 
 /**
  * Submit Registration to Google Apps Script Webhook & Local Storage
+ * Receives the authoritative continuous Registration ID directly from Google Sheets
  */
 export const submitRegistration = async (formData) => {
   const config = getActiveConfig();
-  const registrationId = formData.registrationId || generateRegistrationId();
-  const timestamp = new Date().toLocaleString('en-IN', {
+  
+  // Calculate provisional ID in case of offline fallback
+  let assignedRegistrationId = formData.registrationId || await fetchNextSequentialRegistrationId();
+  
+  let assignedTimestamp = new Date().toLocaleString('en-IN', {
     day: '2-digit',
     month: '2-digit',
     year: 'numeric',
@@ -158,10 +258,10 @@ export const submitRegistration = async (formData) => {
     ? formData.totalAmount
     : (memberFeeTotal + busFeeTotal);
 
-  // Prepare full data payload
+  // Prepare initial payload
   const fullPayload = {
-    registrationId: registrationId,
-    timestamp: timestamp,
+    registrationId: assignedRegistrationId,
+    timestamp: assignedTimestamp,
     primaryName: (formData.primaryName || '').trim(),
     primaryAge: formData.primaryAge ? Number(formData.primaryAge) : '',
     primaryGender: formData.primaryGender || '',
@@ -196,31 +296,80 @@ export const submitRegistration = async (formData) => {
 
   let googleSuccess = false;
 
-  // 1. Submit to Google Apps Script (Using no-cors to guarantee cloud sync without browser CORS errors)
+  // 1. Submit to Google Apps Script Backend (Excel Google Sheet)
   if (config.googleScriptUrl && config.googleScriptUrl.trim().startsWith("http")) {
     const url = config.googleScriptUrl.trim();
     try {
-      await fetch(url, {
+      // Standard POST without no-cors to parse the server-assigned continuous ID from Excel
+      const response = await fetch(url, {
         method: "POST",
-        mode: "no-cors",
         headers: {
           "Content-Type": "text/plain;charset=utf-8",
         },
         body: JSON.stringify(fullPayload),
       });
-      googleSuccess = true;
-    } catch (e) {
-      console.warn("Google Apps Script sync note:", e.message);
+
+      if (response.ok) {
+        const serverData = await response.json();
+        if (serverData && serverData.registrationId) {
+          assignedRegistrationId = serverData.registrationId;
+          if (serverData.timestamp) {
+            assignedTimestamp = serverData.timestamp;
+          }
+          googleSuccess = true;
+          
+          // Track highest sequence continuously
+          const seq = extractSeqNum(serverData.registrationId);
+          if (seq > 0) {
+            saveStoredSequence(seq);
+          }
+        }
+      }
+    } catch (directPostErr) {
+      console.warn("Direct POST parse note, attempting fallback:", directPostErr.message);
+      try {
+        await fetch(url, {
+          method: "POST",
+          mode: "no-cors",
+          headers: {
+            "Content-Type": "text/plain;charset=utf-8",
+          },
+          body: JSON.stringify(fullPayload),
+        });
+        googleSuccess = true;
+
+        // Fetch fresh sequence from Google Sheet to ensure receipt number matches Excel
+        try {
+          const freshIdRes = await fetch(`${url}?action=getNextId&_t=${Date.now()}`, { cache: "no-store" });
+          if (freshIdRes.ok) {
+            const freshData = await freshIdRes.json();
+            if (freshData && freshData.nextSeq) {
+              const assignedSeq = freshData.nextSeq - 1;
+              if (assignedSeq > 0) {
+                const prefix = config.idPrefix || "SBSY-2026-";
+                assignedRegistrationId = `${prefix}${String(assignedSeq).padStart(4, '0')}`;
+                saveStoredSequence(assignedSeq);
+              }
+            }
+          }
+        } catch (queryErr) {}
+      } catch (fallbackErr) {
+        console.warn("Fallback submission note:", fallbackErr.message);
+      }
     }
   }
 
-  // 2. Always persist in local database
+  // Update payload with final assigned ID & timestamp
+  fullPayload.registrationId = assignedRegistrationId;
+  fullPayload.timestamp = assignedTimestamp;
+
+  // 2. Persist in local database
   saveRegistrationLocally(fullPayload);
 
   return {
     success: true,
-    registrationId: registrationId,
-    timestamp: timestamp,
+    registrationId: assignedRegistrationId,
+    timestamp: assignedTimestamp,
     transportMode: fullPayload.transportMode,
     totalMembers: fullPayload.totalMembers,
     chargeableCount: chargeableCount,

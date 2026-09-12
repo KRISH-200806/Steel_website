@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   CheckCircle2,
   AlertCircle,
@@ -13,13 +13,20 @@ import {
   AlertTriangle
 } from 'lucide-react';
 import { getActiveConfig } from './config/picnicConfig';
-import { submitRegistration } from './services/submissionService';
+import { submitRegistration, fetchCloudRegistrations } from './services/submissionService';
 import { AdminDashboard } from './components/AdminDashboard';
 import { SuccessModal } from './components/SuccessModal';
 
 export default function App() {
   const [config, setConfig] = useState(getActiveConfig());
   const [isAdminOpen, setIsAdminOpen] = useState(false);
+
+  // Sync latest cloud registrations in background on load
+  useEffect(() => {
+    if (config.googleScriptUrl) {
+      fetchCloudRegistrations(config.googleScriptUrl).catch(e => console.log("Cloud sync note:", e));
+    }
+  }, [config.googleScriptUrl]);
 
   // Primary Contact State (Member 1 - Main Person)
   const [primaryName, setPrimaryName] = useState('');
@@ -305,8 +312,8 @@ export default function App() {
                         {primaryAge && (
                           <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${Number(primaryAge) > 5 ? 'bg-emerald-100 text-emerald-800' : 'bg-teal-100 text-teal-800'
                             }`}>
-                            {Number(primaryAge) > 5 
-                              ? (isBus ? `₹${feePerMember + busFare} (ફી ₹${feePerMember} + બસ ₹${busFare})` : `₹${feePerMember}`) 
+                            {Number(primaryAge) > 5
+                              ? (isBus ? `₹${feePerMember + busFare} (ફી ₹${feePerMember} + બસ ₹${busFare})` : `₹${feePerMember}`)
                               : 'મફત (₹૦)'}
                           </span>
                         )}
@@ -509,8 +516,8 @@ export default function App() {
                                 {hasAge && (
                                   <span className={`text-[11px] font-bold px-2 py-0.5 rounded-md ${isChargeable ? 'bg-emerald-100 text-emerald-900' : 'bg-teal-100 text-teal-900'
                                     }`}>
-                                    {isChargeable 
-                                      ? (isBus ? `ચાર્જ: ₹${feePerMember + busFare} (ફી ₹${feePerMember} + બસ ₹${busFare})` : `ચાર્જ: ₹${feePerMember}`) 
+                                    {isChargeable
+                                      ? (isBus ? `ચાર્જ: ₹${feePerMember + busFare} (ફી ₹${feePerMember} + બસ ₹${busFare})` : `ચાર્જ: ₹${feePerMember}`)
                                       : '👶 મફત (₹૦)'}
                                   </span>
                                 )}

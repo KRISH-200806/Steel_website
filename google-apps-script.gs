@@ -5,7 +5,8 @@
  * 
  * 1. Automatically initializes formatted columns in Google Sheets
  * 2. Saves all member details, travel mode (Bus / Own Vehicle), ages, & fee breakdown
- * 3. Works seamlessly without requiring Google login from website users
+ * 3. Guarantees continuous strictly sequential Registration IDs (0001, 0002, 0003...)
+ *    across all devices, users, and days without ever resetting.
  * ==============================================================================
  */
 
@@ -14,6 +15,35 @@ const SCRIPT_CONFIG = {
   ID_PREFIX: "SBSY-2026-",
   MAX_MEMBER_COLUMNS: 15 // Up to 15 members columns
 };
+
+/**
+ * Helper to calculate the next guaranteed sequential registration ID
+ * Scans Column A for all numeric sequences, finds the highest number, and increments by 1.
+ */
+function getNextContinuousRegistrationId(sheet) {
+  const lastRow = sheet.getLastRow();
+  let maxSeq = 0;
+  if (lastRow > 1) {
+    const colAValues = sheet.getRange(2, 1, lastRow - 1, 1).getValues();
+    for (let i = 0; i < colAValues.length; i++) {
+      const cellVal = String(colAValues[i][0] || "").trim();
+      const match = cellVal.match(/(\d+)$/);
+      if (match) {
+        const num = parseInt(match[1], 10);
+        if (!isNaN(num) && num > maxSeq) {
+          maxSeq = num;
+        }
+      }
+    }
+  }
+  // If no IDs parsed, row 2 is 1, row 3 is 2, etc.
+  const nextSeqNumber = Math.max(maxSeq + 1, lastRow);
+  const registrationId = SCRIPT_CONFIG.ID_PREFIX + String(nextSeqNumber).padStart(4, '0');
+  return {
+    nextSeqNumber: nextSeqNumber,
+    registrationId: registrationId
+  };
+}
 
 /**
  * Handle POST request from the website registration form
@@ -49,11 +79,9 @@ function doPost(e) {
     // Ensure table headers exist
     setupHeadersIfMissing(sheet);
 
-    // 1. Generate / verify Registration ID
-    const lastRow = sheet.getLastRow();
-    const nextSeqNumber = Math.max(1, lastRow); // row 2 = 0001
-    const generatedId = SCRIPT_CONFIG.ID_PREFIX + String(nextSeqNumber).padStart(4, '0');
-    const registrationId = data.registrationId || generatedId;
+    // 1. Generate strictly continuous, sequential Registration ID from the Google Sheet
+    const seqInfo = getNextContinuousRegistrationId(sheet);
+    const registrationId = seqInfo.registrationId;
 
     // 2. Format Date & Time
     const timestamp = data.timestamp || Utilities.formatDate(new Date(), "Asia/Kolkata", "dd/MM/yyyy, hh:mm:ss a");
@@ -162,13 +190,36 @@ function doPost(e) {
 }
 
 /**
- * Handle GET request (Fetch all registrations & Health Check)
+ * Handle GET request (Fetch all registrations, Get next ID, Resequence & Health Check)
  */
 function doGet(e) {
   try {
     const ss = SpreadsheetApp.getActiveSpreadsheet();
     let sheet = ss.getSheetByName(SCRIPT_CONFIG.SHEET_NAME);
     
+    // Check for Repair / Resequence Action
+    if (e && e.parameter && e.parameter.action === "repairSequence") {
+      const repairResult = repairRegistrationSequence();
+      return createJsonResponse(repairResult);
+    }
+
+    // Check for Get Next ID Action
+    if (e && e.parameter && e.parameter.action === "getNextId") {
+      if (!sheet || sheet.getLastRow() <= 1) {
+        return createJsonResponse({
+          success: true,
+          nextSeq: 1,
+          nextId: SCRIPT_CONFIG.ID_PREFIX + "0001"
+        });
+      }
+      const seq = getNextContinuousRegistrationId(sheet);
+      return createJsonResponse({
+        success: true,
+        nextSeq: seq.nextSeqNumber,
+        nextId: seq.registrationId
+      });
+    }
+
     if (!sheet || sheet.getLastRow() <= 1) {
       return createJsonResponse({
         status: "active",
@@ -230,6 +281,47 @@ function doGet(e) {
       status: "error",
       message: error.message
     });
+  }
+}
+
+/**
+ * Resequence and fix all registration IDs in Google Sheet from row 2 to lastRow (0001, 0002, 0003...)
+ */
+function repairRegistrationSequence() {
+  const lock = LockService.getScriptLock();
+  try {
+    lock.waitLock(30000);
+  } catch (e) {
+    return { success: false, message: "Server busy. Please try again." };
+  }
+
+  try {
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const sheet = ss.getSheetByName(SCRIPT_CONFIG.SHEET_NAME);
+    if (!sheet || sheet.getLastRow() <= 1) {
+      return { success: true, count: 0, message: "No registration records found to resequence." };
+    }
+
+    const lastRow = sheet.getLastRow();
+    const range = sheet.getRange(2, 1, lastRow - 1, 1);
+    const values = range.getValues();
+
+    for (let i = 0; i < values.length; i++) {
+      const seqNumber = i + 1;
+      values[i][0] = SCRIPT_CONFIG.ID_PREFIX + String(seqNumber).padStart(4, '0');
+    }
+
+    range.setValues(values);
+
+    return {
+      success: true,
+      count: values.length,
+      message: `Successfully resequenced ${values.length} registration IDs in order (0001 to ${String(values.length).padStart(4, '0')}).`
+    };
+  } catch (err) {
+    return { success: false, message: "Resequencing error: " + err.message };
+  } finally {
+    lock.releaseLock();
   }
 }
 
