@@ -205,128 +205,114 @@ export const updatePaymentStatus = (registrationId, newStatus) => {
   }
 };
 
+// Guard against simultaneous duplicate submissions
+let isSubmissionInProgress = false;
+
 /**
  * Submit Registration to Google Apps Script Webhook & Local Storage
- * Receives the authoritative continuous Registration ID directly from Google Sheets
+ * Sends EXACTLY ONE request to prevent duplicate entries in Google Sheets
  */
 export const submitRegistration = async (formData) => {
-  const config = getActiveConfig();
-  
-  // Calculate provisional ID in case of offline fallback
-  let assignedRegistrationId = formData.registrationId || await fetchNextSequentialRegistrationId();
-  
-  let assignedTimestamp = new Date().toLocaleString('en-IN', {
-    day: '2-digit',
-    month: '2-digit',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit',
-    hour12: true
-  });
+  if (isSubmissionInProgress) {
+    console.warn("Submission already in progress. Ignoring duplicate trigger.");
+    return { success: false, message: "Submission in progress" };
+  }
 
-  const membersList = formData.members || [];
-  const feePerMember = config.feePerMember || 100;
-  const busFare = config.busFare || 200;
-  const transportMode = formData.transportMode || 'Bus (Jothan)';
-  const isBus = transportMode.includes('Bus');
+  isSubmissionInProgress = true;
 
-  // Rule: Age > 5 is chargeable at feePerMember (₹100) + Bus Fare (₹200 if bus); Age <= 5 is free (₹0)
-  const chargeableCount = formData.chargeableCount !== undefined
-    ? formData.chargeableCount
-    : membersList.filter(m => {
-      const age = Number(m.age);
-      return !isNaN(age) && age > 5;
-    }).length;
+  try {
+    const config = getActiveConfig();
+    
+    // 1. Determine accurate continuous Registration ID from Google Sheet or fallback
+    let assignedRegistrationId = formData.registrationId;
+    if (!assignedRegistrationId) {
+      assignedRegistrationId = await fetchNextSequentialRegistrationId();
+    }
+    
+    let assignedTimestamp = new Date().toLocaleString('en-IN', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hour12: true
+    });
 
-  const freeKidsCount = formData.freeKidsCount !== undefined
-    ? formData.freeKidsCount
-    : membersList.filter(m => {
-      const age = Number(m.age);
-      return !isNaN(age) && age > 0 && age <= 5;
-    }).length;
+    const membersList = formData.members || [];
+    const feePerMember = config.feePerMember || 100;
+    const busFare = config.busFare || 200;
+    const transportMode = formData.transportMode || 'Bus (Jothan)';
+    const isBus = transportMode.includes('Bus');
 
-  const memberFeeTotal = formData.memberFeeTotal !== undefined
-    ? formData.memberFeeTotal
-    : chargeableCount * feePerMember;
+    // Rule: Age > 5 is chargeable at feePerMember (₹100) + Bus Fare (₹200 if bus); Age <= 5 is free (₹0)
+    const chargeableCount = formData.chargeableCount !== undefined
+      ? formData.chargeableCount
+      : membersList.filter(m => {
+        const age = Number(m.age);
+        return !isNaN(age) && age > 5;
+      }).length;
 
-  const busFeeTotal = formData.busFeeTotal !== undefined
-    ? formData.busFeeTotal
-    : (isBus ? chargeableCount * busFare : 0);
+    const freeKidsCount = formData.freeKidsCount !== undefined
+      ? formData.freeKidsCount
+      : membersList.filter(m => {
+        const age = Number(m.age);
+        return !isNaN(age) && age > 0 && age <= 5;
+      }).length;
 
-  const totalAmount = formData.totalAmount !== undefined
-    ? formData.totalAmount
-    : (memberFeeTotal + busFeeTotal);
+    const memberFeeTotal = formData.memberFeeTotal !== undefined
+      ? formData.memberFeeTotal
+      : chargeableCount * feePerMember;
 
-  // Prepare initial payload
-  const fullPayload = {
-    registrationId: assignedRegistrationId,
-    timestamp: assignedTimestamp,
-    primaryName: (formData.primaryName || '').trim(),
-    primaryAge: formData.primaryAge ? Number(formData.primaryAge) : '',
-    primaryGender: formData.primaryGender || '',
-    mobileNumber: (formData.mobileNumber || '').trim(),
-    transportMode: transportMode,
-    totalMembers: membersList.length || 1,
-    chargeableCount: chargeableCount,
-    freeKidsCount: freeKidsCount,
-    feePerMember: feePerMember,
-    busFare: busFare,
-    memberFeeTotal: memberFeeTotal,
-    busFeeTotal: busFeeTotal,
-    totalAmount: totalAmount,
-    status: "Confirmed",
-    members: membersList.map((m, idx) => {
-      const ageNum = Number(m.age) || 0;
-      const isChargeable = ageNum > 5;
-      const mMemberFee = isChargeable ? feePerMember : 0;
-      const mBusFee = (isChargeable && isBus) ? busFare : 0;
-      return {
-        index: idx + 1,
-        name: (m.name || '').trim(),
-        age: ageNum,
-        gender: m.gender || '',
-        isChargeable: isChargeable,
-        memberFee: mMemberFee,
-        busFee: mBusFee,
-        fee: mMemberFee + mBusFee
-      };
-    })
-  };
+    const busFeeTotal = formData.busFeeTotal !== undefined
+      ? formData.busFeeTotal
+      : (isBus ? chargeableCount * busFare : 0);
 
-  let googleSuccess = false;
+    const totalAmount = formData.totalAmount !== undefined
+      ? formData.totalAmount
+      : (memberFeeTotal + busFeeTotal);
 
-  // 1. Submit to Google Apps Script Backend (Excel Google Sheet)
-  if (config.googleScriptUrl && config.googleScriptUrl.trim().startsWith("http")) {
-    const url = config.googleScriptUrl.trim();
-    try {
-      // Standard POST without no-cors to parse the server-assigned continuous ID from Excel
-      const response = await fetch(url, {
-        method: "POST",
-        headers: {
-          "Content-Type": "text/plain;charset=utf-8",
-        },
-        body: JSON.stringify(fullPayload),
-      });
+    // Prepare clean unified payload
+    const fullPayload = {
+      registrationId: assignedRegistrationId,
+      timestamp: assignedTimestamp,
+      primaryName: (formData.primaryName || '').trim(),
+      primaryAge: formData.primaryAge ? Number(formData.primaryAge) : '',
+      primaryGender: formData.primaryGender || '',
+      mobileNumber: (formData.mobileNumber || '').trim(),
+      transportMode: transportMode,
+      totalMembers: membersList.length || 1,
+      chargeableCount: chargeableCount,
+      freeKidsCount: freeKidsCount,
+      feePerMember: feePerMember,
+      busFare: busFare,
+      memberFeeTotal: memberFeeTotal,
+      busFeeTotal: busFeeTotal,
+      totalAmount: totalAmount,
+      status: "Confirmed",
+      members: membersList.map((m, idx) => {
+        const ageNum = Number(m.age) || 0;
+        const isChargeable = ageNum > 5;
+        const mMemberFee = isChargeable ? feePerMember : 0;
+        const mBusFee = (isChargeable && isBus) ? busFare : 0;
+        return {
+          index: idx + 1,
+          name: (m.name || '').trim(),
+          age: ageNum,
+          gender: m.gender || '',
+          isChargeable: isChargeable,
+          memberFee: mMemberFee,
+          busFee: mBusFee,
+          fee: mMemberFee + mBusFee
+        };
+      })
+    };
 
-      if (response.ok) {
-        const serverData = await response.json();
-        if (serverData && serverData.registrationId) {
-          assignedRegistrationId = serverData.registrationId;
-          if (serverData.timestamp) {
-            assignedTimestamp = serverData.timestamp;
-          }
-          googleSuccess = true;
-          
-          // Track highest sequence continuously
-          const seq = extractSeqNum(serverData.registrationId);
-          if (seq > 0) {
-            saveStoredSequence(seq);
-          }
-        }
-      }
-    } catch (directPostErr) {
-      console.warn("Direct POST parse note, attempting fallback:", directPostErr.message);
+    let googleSyncSuccess = false;
+
+    // 2. Submit to Google Apps Script Backend (Excel Google Sheet) - SINGLE REQUEST
+    if (config.googleScriptUrl && config.googleScriptUrl.trim().startsWith("http")) {
+      const url = config.googleScriptUrl.trim();
       try {
         await fetch(url, {
           method: "POST",
@@ -336,52 +322,34 @@ export const submitRegistration = async (formData) => {
           },
           body: JSON.stringify(fullPayload),
         });
-        googleSuccess = true;
-
-        // Fetch fresh sequence from Google Sheet to ensure receipt number matches Excel
-        try {
-          const freshIdRes = await fetch(`${url}?action=getNextId&_t=${Date.now()}`, { cache: "no-store" });
-          if (freshIdRes.ok) {
-            const freshData = await freshIdRes.json();
-            if (freshData && freshData.nextSeq) {
-              const assignedSeq = freshData.nextSeq - 1;
-              if (assignedSeq > 0) {
-                const prefix = config.idPrefix || "SBSY-2026-";
-                assignedRegistrationId = `${prefix}${String(assignedSeq).padStart(4, '0')}`;
-                saveStoredSequence(assignedSeq);
-              }
-            }
-          }
-        } catch (queryErr) {}
-      } catch (fallbackErr) {
-        console.warn("Fallback submission note:", fallbackErr.message);
+        googleSyncSuccess = true;
+      } catch (postErr) {
+        console.warn("Google Sheet sync notice:", postErr?.message || postErr);
       }
     }
+
+    // 3. Persist in local storage
+    saveRegistrationLocally(fullPayload);
+
+    return {
+      success: true,
+      registrationId: assignedRegistrationId,
+      timestamp: assignedTimestamp,
+      transportMode: fullPayload.transportMode,
+      totalMembers: fullPayload.totalMembers,
+      chargeableCount: chargeableCount,
+      freeKidsCount: freeKidsCount,
+      totalAmount: totalAmount,
+      feePerMember: feePerMember,
+      googleSync: googleSyncSuccess
+    };
+  } finally {
+    isSubmissionInProgress = false;
   }
-
-  // Update payload with final assigned ID & timestamp
-  fullPayload.registrationId = assignedRegistrationId;
-  fullPayload.timestamp = assignedTimestamp;
-
-  // 2. Persist in local database
-  saveRegistrationLocally(fullPayload);
-
-  return {
-    success: true,
-    registrationId: assignedRegistrationId,
-    timestamp: assignedTimestamp,
-    transportMode: fullPayload.transportMode,
-    totalMembers: fullPayload.totalMembers,
-    chargeableCount: chargeableCount,
-    freeKidsCount: freeKidsCount,
-    totalAmount: totalAmount,
-    feePerMember: feePerMember,
-    googleSync: googleSuccess
-  };
 };
 
 /**
- * Test Connection to Google Apps Script Webhook
+ * Test Connection to Google Apps Script Webhook (uses GET action=getNextId to avoid adding dummy rows)
  */
 export const testGoogleScriptConnection = async (url) => {
   if (!url || !url.startsWith("http")) {
@@ -389,41 +357,14 @@ export const testGoogleScriptConnection = async (url) => {
   }
 
   try {
-    const testPayload = {
-      action: "TEST_CONNECTION",
-      registrationId: "TEST-0000",
-      primaryName: "Test Webhook",
-      mobileNumber: "0000000000",
-      transportMode: "Bus (Jothan)",
-      totalMembers: 1,
-      timestamp: new Date().toLocaleString('en-IN')
-    };
-
-    const response = await fetch(url, {
-      method: "POST",
-      headers: {
-        "Content-Type": "text/plain;charset=utf-8",
-      },
-      body: JSON.stringify(testPayload)
-    });
-
+    const response = await fetch(`${url}?action=getNextId&_t=${Date.now()}`, { method: "GET" });
     if (response.ok) {
       return { success: true, message: "Google Apps Script Webhook is active and connected!" };
     } else {
       return { success: false, message: `Server responded with status ${response.status}. Please check permissions.` };
     }
   } catch (e) {
-    try {
-      await fetch(url, {
-        method: "POST",
-        mode: "no-cors",
-        headers: { "Content-Type": "text/plain" },
-        body: JSON.stringify({ action: "TEST_NO_CORS" })
-      });
-      return { success: true, message: "Webhook ping received in no-cors mode." };
-    } catch (err2) {
-      return { success: false, message: `Connection failed: ${err2.message}` };
-    }
+    return { success: false, message: `Connection note: ${e.message}` };
   }
 };
 
