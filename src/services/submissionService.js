@@ -188,7 +188,7 @@ export const saveRegistrationLocally = (registration) => {
 /**
  * Update Status for a Registration ID
  */
-export const updatePaymentStatus = (registrationId, newStatus) => {
+export const updatePaymentStatus = async (registrationId, newStatus, customUrl) => {
   try {
     const existing = getStoredRegistrations();
     const updated = existing.map(reg => {
@@ -198,11 +198,42 @@ export const updatePaymentStatus = (registrationId, newStatus) => {
       return reg;
     });
     localStorage.setItem(STORAGE_KEYS.REGISTRATIONS, JSON.stringify(updated));
+    
+    // Sync to Google Sheets cloud backend if configured
+    syncPaymentStatusToCloud(customUrl, registrationId, newStatus).catch(e => {
+      console.warn("Background cloud status sync notice:", e);
+    });
+
     return true;
   } catch (e) {
     console.error("Error updating status:", e);
     return false;
   }
+};
+
+/**
+ * Sync updated Payment Status (Pending / Done) to Google Apps Script Webhook
+ */
+export const syncPaymentStatusToCloud = async (customUrl, registrationId, newStatus) => {
+  const config = getActiveConfig();
+  const url = customUrl || config.googleScriptUrl;
+  if (!url || !url.startsWith("http")) {
+    return { success: false, message: "No cloud webhook configured." };
+  }
+
+  try {
+    const response = await fetch(
+      `${url}?action=updatePaymentStatus&registrationId=${encodeURIComponent(registrationId)}&status=${encodeURIComponent(newStatus)}&_t=${Date.now()}`,
+      { method: "GET" }
+    );
+    if (response.ok) {
+      const result = await response.json();
+      return result;
+    }
+  } catch (e) {
+    console.warn("Cloud payment status sync note:", e);
+  }
+  return { success: false };
 };
 
 // Guard against simultaneous duplicate submissions
@@ -289,7 +320,8 @@ export const submitRegistration = async (formData) => {
       memberFeeTotal: memberFeeTotal,
       busFeeTotal: busFeeTotal,
       totalAmount: totalAmount,
-      status: "Confirmed",
+      paymentStatus: "Pending",
+      status: "Pending",
       members: membersList.map((m, idx) => {
         const ageNum = Number(m.age) || 0;
         const isChargeable = ageNum > 5;
@@ -400,7 +432,7 @@ export const exportToCSV = (registrations) => {
     "Member Fee (₹)",
     "Bus Fare (₹)",
     "Total Amount (₹)",
-    "Status"
+    "Payment Status"
   ];
 
   for (let i = 1; i <= maxMembers; i++) {
@@ -447,7 +479,7 @@ export const exportToCSV = (registrations) => {
       memFee,
       bFee,
       totalAmt,
-      `"${r.status || 'Confirmed'}"`
+      `"${r.paymentStatus || r.status || 'Pending'}"`
     ];
 
     for (let i = 0; i < maxMembers; i++) {
@@ -508,6 +540,7 @@ export const exportToExcelFormatted = (registrations) => {
         .bg-bus { background-color: #eff6ff; color: #1e40af; font-weight: bold; }
         .bg-vehicle { background-color: #faf5ff; color: #6b21a8; font-weight: bold; }
         .bg-confirmed { background-color: #d1fae5; color: #065f46; font-weight: bold; }
+        .bg-pending { background-color: #fef3c7; color: #92400e; font-weight: bold; }
         .bg-amount { background-color: #ecfdf5; color: #047857; font-weight: bold; text-align: right; }
       </style>
     </head>
@@ -531,7 +564,7 @@ export const exportToExcelFormatted = (registrations) => {
             <th>Member Fee (₹)</th>
             <th>Bus Fare (₹)</th>
             <th>Total Amount (₹)</th>
-            <th>Status</th>
+            <th>Payment Status</th>
   `;
 
   for (let i = 1; i <= maxMembers; i++) {
@@ -561,6 +594,9 @@ export const exportToExcelFormatted = (registrations) => {
       ? r.totalAmount
       : (memFee + bFee);
 
+    const paymentStatusVal = r.paymentStatus || r.status || 'Pending';
+    const statusClass = paymentStatusVal === 'Done' ? 'bg-confirmed' : 'bg-pending';
+
     tableHtml += `
       <tr>
         <td class="text-center"><strong>${r.registrationId || ''}</strong></td>
@@ -576,7 +612,7 @@ export const exportToExcelFormatted = (registrations) => {
         <td class="text-center">₹${memFee}</td>
         <td class="text-center">${isBus ? `₹${bFee}` : '₹0'}</td>
         <td class="bg-amount">₹${totalAmt.toLocaleString('en-IN')}</td>
-        <td class="text-center bg-confirmed">${r.status || 'Confirmed'}</td>
+        <td class="text-center ${statusClass}">${paymentStatusVal}</td>
       `;
 
     for (let i = 0; i < maxMembers; i++) {

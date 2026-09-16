@@ -48,7 +48,9 @@ export const AdminDashboard = ({ onClose }) => {
   // Search & Filter state
   const [searchTerm, setSearchTerm] = useState('');
   const [transportFilter, setTransportFilter] = useState('ALL');
+  const [paymentFilter, setPaymentFilter] = useState('ALL');
   const [expandedRow, setExpandedRow] = useState(null);
+  const [updatingStatusId, setUpdatingStatusId] = useState(null);
 
   // Settings & Resequence State
   const [config, setConfig] = useState(getActiveConfig());
@@ -84,6 +86,29 @@ export const AdminDashboard = ({ onClose }) => {
   useEffect(() => {
     loadData();
   }, []);
+
+  // Change and Sync Payment Status
+  const handleStatusChange = async (registrationId, newStatus) => {
+    setUpdatingStatusId(registrationId);
+    try {
+      // 1. Optimistic Local State Update
+      setRegistrations(prev =>
+        prev.map(reg => {
+          if (reg.registrationId === registrationId) {
+            return { ...reg, paymentStatus: newStatus, status: newStatus };
+          }
+          return reg;
+        })
+      );
+
+      // 2. Persist locally & sync to Google Sheets
+      await updatePaymentStatus(registrationId, newStatus, config.googleScriptUrl);
+    } catch (err) {
+      console.error("Status update error:", err);
+    } finally {
+      setUpdatingStatusId(null);
+    }
+  };
 
   // Handle PIN Login
   const handleLogin = (e) => {
@@ -152,6 +177,9 @@ export const AdminDashboard = ({ onClose }) => {
   const vehicleCount = registrations.filter(r => (r.transportMode || '') === 'Own Vehicle').length;
   const busMemberCount = registrations.filter(r => (r.transportMode || '').includes('Bus')).reduce((acc, r) => acc + (Number(r.totalMembers) || (r.members ? r.members.length : 1)), 0);
 
+  const doneCount = registrations.filter(r => (r.paymentStatus || r.status) === 'Done').length;
+  const pendingCount = totalRegistrations - doneCount;
+
   // Total Collection based on Age > 5
   const totalCollectionAmount = registrations.reduce((acc, r) => {
     if (r.totalAmount !== undefined) return acc + Number(r.totalAmount);
@@ -165,11 +193,13 @@ export const AdminDashboard = ({ onClose }) => {
   // Filter logic
   const filteredRegistrations = registrations.filter(r => {
     const searchLower = searchTerm.toLowerCase();
+    const pStatus = (r.paymentStatus || r.status || 'Pending').toLowerCase();
     const matchesSearch =
       (r.primaryName || '').toLowerCase().includes(searchLower) ||
       (r.mobileNumber || '').includes(searchLower) ||
       (r.registrationId || '').toLowerCase().includes(searchLower) ||
       (r.transportMode || '').toLowerCase().includes(searchLower) ||
+      pStatus.includes(searchLower) ||
       (r.members || []).some(m => (m.name || '').toLowerCase().includes(searchLower));
 
     if (!matchesSearch) return false;
@@ -177,6 +207,11 @@ export const AdminDashboard = ({ onClose }) => {
     if (transportFilter !== 'ALL') {
       if (transportFilter === 'BUS' && !(r.transportMode || '').includes('Bus')) return false;
       if (transportFilter === 'VEHICLE' && (r.transportMode || '') !== 'Own Vehicle') return false;
+    }
+
+    if (paymentFilter !== 'ALL') {
+      if (paymentFilter === 'PENDING' && pStatus !== 'pending') return false;
+      if (paymentFilter === 'DONE' && pStatus !== 'done') return false;
     }
 
     return true;
@@ -369,7 +404,7 @@ export const AdminDashboard = ({ onClose }) => {
                 />
               </div>
 
-              {/* Transportation Filter & Export Actions */}
+              {/* Transportation Filter, Payment Filter & Export Actions */}
               <div className="flex flex-wrap items-center gap-2 w-full md:w-auto justify-end">
 
                 {/* Transport Filter */}
@@ -381,6 +416,17 @@ export const AdminDashboard = ({ onClose }) => {
                   <option value="ALL">All Travel Modes ({totalRegistrations})</option>
                   <option value="BUS">🚌 Bus from Jothan ({busCount})</option>
                   <option value="VEHICLE">🚗 Own Vehicle ({vehicleCount})</option>
+                </select>
+
+                {/* Payment Status Filter */}
+                <select
+                  value={paymentFilter}
+                  onChange={(e) => setPaymentFilter(e.target.value)}
+                  className="px-3.5 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-700 focus:outline-none"
+                >
+                  <option value="ALL">All Payment Status ({totalRegistrations})</option>
+                  <option value="PENDING">⏳ Payment Pending ({pendingCount})</option>
+                  <option value="DONE">✅ Payment Done ({doneCount})</option>
                 </select>
 
                 {/* Open Google Sheet Direct Link Button */}
@@ -474,7 +520,7 @@ export const AdminDashboard = ({ onClose }) => {
                         <th className="py-3.5 px-4">Fee Breakdown</th>
                         <th className="py-3.5 px-4">Total Amount</th>
                         <th className="py-3.5 px-4">Travel Mode</th>
-                        <th className="py-3.5 px-4">Status</th>
+                        <th className="py-3.5 px-4 text-center">Payment Status</th>
                         <th className="py-3.5 px-4 text-center">Actions</th>
                       </tr>
                     </thead>
@@ -498,6 +544,9 @@ export const AdminDashboard = ({ onClose }) => {
                         const totalAmt = row.totalAmount !== undefined
                           ? row.totalAmount
                           : (memFee + bFee);
+
+                        const currentStatus = row.paymentStatus || row.status || 'Pending';
+                        const isDone = currentStatus === 'Done';
 
                         return (
                           <React.Fragment key={row.registrationId}>
@@ -561,12 +610,27 @@ export const AdminDashboard = ({ onClose }) => {
                                 )}
                               </td>
 
-                              {/* Status Badge */}
-                              <td className="py-3.5 px-4">
-                                <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-emerald-50 text-emerald-800 border border-emerald-300 font-bold text-[11px]">
-                                  <CheckCircle className="w-3.5 h-3.5 text-emerald-600" />
-                                  <span>Confirmed</span>
-                                </span>
+                              {/* Payment Status Interactive Selector */}
+                              <td className="py-3.5 px-4 text-center">
+                                <div className="inline-flex items-center justify-center gap-1.5">
+                                  <select
+                                    value={currentStatus}
+                                    onChange={(e) => handleStatusChange(row.registrationId, e.target.value)}
+                                    disabled={updatingStatusId === row.registrationId}
+                                    className={`px-2.5 py-1 rounded-xl font-bold text-[11px] cursor-pointer border transition-all focus:outline-none shadow-2xs ${
+                                      isDone
+                                        ? 'bg-emerald-50 text-emerald-800 border-emerald-300 hover:bg-emerald-100'
+                                        : 'bg-amber-50 text-amber-900 border-amber-300 hover:bg-amber-100'
+                                    }`}
+                                    title="Click to change Payment Status"
+                                  >
+                                    <option value="Pending">⏳ Pending</option>
+                                    <option value="Done">✅ Done</option>
+                                  </select>
+                                  {updatingStatusId === row.registrationId && (
+                                    <Loader2 className="w-3.5 h-3.5 animate-spin text-emerald-600" />
+                                  )}
+                                </div>
                               </td>
 
                               {/* Quick Actions */}

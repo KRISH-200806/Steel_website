@@ -105,7 +105,7 @@ function doPost(e) {
     const memberFeeTotal = data.memberFeeTotal !== undefined ? Number(data.memberFeeTotal) : (chargeableCount * feePerMember);
     const busFeeTotal = data.busFeeTotal !== undefined ? Number(data.busFeeTotal) : (isBus ? chargeableCount * busFare : 0);
     const totalAmount = data.totalAmount !== undefined ? Number(data.totalAmount) : (memberFeeTotal + busFeeTotal);
-    const status = data.status || "Confirmed";
+    const paymentStatus = data.paymentStatus || data.status || "Pending";
 
     // 4. Build Row Data
     const rowData = [
@@ -122,7 +122,7 @@ function doPost(e) {
       memberFeeTotal,
       busFeeTotal,
       totalAmount,
-      status
+      paymentStatus
     ];
 
     // Append member columns
@@ -165,7 +165,11 @@ function doPost(e) {
       totalCell.setBackground("#ecfdf5").setFontColor("#047857").setFontWeight("bold");
 
       const statusCell = sheet.getRange(insertedRowIndex, 14);
-      statusCell.setBackground("#d1fae5").setFontColor("#065f46").setFontWeight("bold");
+      if (paymentStatus === "Done") {
+        statusCell.setBackground("#d1fae5").setFontColor("#065f46").setFontWeight("bold");
+      } else {
+        statusCell.setBackground("#fef3c7").setFontColor("#92400e").setFontWeight("bold");
+      }
     } catch (styleErr) {
       Logger.log("Style note: " + styleErr.toString());
     }
@@ -175,7 +179,8 @@ function doPost(e) {
       message: "Registration successfully recorded in Google Sheet!",
       registrationId: registrationId,
       timestamp: timestamp,
-      totalAmount: totalAmount
+      totalAmount: totalAmount,
+      paymentStatus: paymentStatus
     });
 
   } catch (error) {
@@ -190,13 +195,21 @@ function doPost(e) {
 }
 
 /**
- * Handle GET request (Fetch all registrations, Get next ID, Resequence & Health Check)
+ * Handle GET request (Fetch all registrations, Get next ID, Update Status, Resequence & Health Check)
  */
 function doGet(e) {
   try {
     const ss = SpreadsheetApp.getActiveSpreadsheet();
     let sheet = ss.getSheetByName(SCRIPT_CONFIG.SHEET_NAME);
     
+    // Check for Update Payment Status Action
+    if (e && e.parameter && e.parameter.action === "updatePaymentStatus") {
+      const regId = e.parameter.registrationId || e.parameter.id;
+      const newStatus = e.parameter.status || e.parameter.paymentStatus || "Done";
+      const updateResult = updateRegistrationPaymentStatus(sheet, regId, newStatus);
+      return createJsonResponse(updateResult);
+    }
+
     // Check for Repair / Resequence Action
     if (e && e.parameter && e.parameter.action === "repairSequence") {
       const repairResult = repairRegistrationSequence();
@@ -249,6 +262,8 @@ function doGet(e) {
         }
       }
 
+      const pStatus = String(row[13] || "Pending");
+
       return {
         registrationId: String(row[0] || ""),
         timestamp: String(row[1] || ""),
@@ -263,7 +278,8 @@ function doGet(e) {
         memberFeeTotal: Number(row[10]) || 0,
         busFeeTotal: Number(row[11]) || 0,
         totalAmount: Number(row[12]) || 0,
-        status: String(row[13] || "Confirmed"),
+        paymentStatus: pStatus,
+        status: pStatus,
         members: members
       };
     }).reverse(); // Newest first
@@ -281,6 +297,61 @@ function doGet(e) {
       status: "error",
       message: error.message
     });
+  }
+}
+
+/**
+ * Update Payment Status (Pending / Done) for a given Registration ID in Google Sheet
+ */
+function updateRegistrationPaymentStatus(sheet, registrationId, newStatus) {
+  const lock = LockService.getScriptLock();
+  try {
+    lock.waitLock(30000);
+  } catch (e) {
+    return { success: false, message: "Server busy. Please try again." };
+  }
+
+  try {
+    if (!sheet || sheet.getLastRow() <= 1) {
+      return { success: false, message: "No registration records found in Google Sheet." };
+    }
+
+    const lastRow = sheet.getLastRow();
+    const idValues = sheet.getRange(2, 1, lastRow - 1, 1).getValues();
+    let targetRow = -1;
+
+    for (let i = 0; i < idValues.length; i++) {
+      if (String(idValues[i][0]).trim() === String(registrationId).trim()) {
+        targetRow = i + 2; // +2 for 1-based index & header row
+        break;
+      }
+    }
+
+    if (targetRow === -1) {
+      return { success: false, message: "Registration ID not found: " + registrationId };
+    }
+
+    // Column 14 is Payment Status
+    const statusCell = sheet.getRange(targetRow, 14);
+    statusCell.setValue(newStatus);
+
+    // Style according to status
+    if (newStatus === "Done") {
+      statusCell.setBackground("#d1fae5").setFontColor("#065f46").setFontWeight("bold");
+    } else {
+      statusCell.setBackground("#fef3c7").setFontColor("#92400e").setFontWeight("bold");
+    }
+
+    return {
+      success: true,
+      message: "Payment status updated to " + newStatus + " for " + registrationId,
+      registrationId: registrationId,
+      paymentStatus: newStatus
+    };
+  } catch (err) {
+    return { success: false, message: "Status update error: " + err.message };
+  } finally {
+    lock.releaseLock();
   }
 }
 
@@ -344,7 +415,7 @@ function setupHeadersIfMissing(sheet) {
       "Member Fee Total (₹)",
       "Bus Fare Total (₹)",
       "Total Amount (₹)",
-      "Status"
+      "Payment Status"
     ];
 
     for (let i = 1; i <= SCRIPT_CONFIG.MAX_MEMBER_COLUMNS; i++) {
