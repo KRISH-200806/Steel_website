@@ -35,7 +35,7 @@ This guide walks you through setting up automatic, real-time data storage in **G
 
 ### Step 4: Link with the Web App
 1. In the Picnic Registration web application, click the **Admin Dashboard** button (key icon in top right) or open Admin Settings.
-2. Enter the default PIN: `2026`.
+2. Enter your **Admin PIN**.
 3. In the **Settings** tab, paste your **Google Apps Script Web App URL**.
 4. Click **Save Configuration & Test Connection**.
 5. You're all set! Every registration submitted from the website will now:

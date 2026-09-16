@@ -21,6 +21,14 @@ export default function App() {
   const [config, setConfig] = useState(getActiveConfig());
   const [isAdminOpen, setIsAdminOpen] = useState(false);
 
+  // Check URL parameters for direct admin access (?admin=true or #admin)
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('admin') === 'true' || params.get('admin') === '1' || window.location.hash === '#admin') {
+      setIsAdminOpen(true);
+    }
+  }, []);
+
   // Sync latest cloud registrations in background on load
   useEffect(() => {
     if (config.googleScriptUrl) {
@@ -264,6 +272,40 @@ export default function App() {
             config={config}
             onReset={handleReset}
           />
+        ) : config.isRegistrationOpen === false ? (
+          <div className="bg-white rounded-3xl border border-slate-200 shadow-lg p-6 sm:p-8 text-center space-y-5 animate-scale-up">
+            <div className="w-16 h-16 rounded-2xl bg-amber-100 text-amber-700 flex items-center justify-center mx-auto shadow-xs text-3xl">
+              🛑
+            </div>
+
+            <div className="space-y-2">
+              <span className="inline-block px-3 py-1 rounded-full text-xs font-bold bg-rose-100 text-rose-800 border border-rose-200">
+                ઓનલાઇન રજિસ્ટ્રેશન પૂર્ણ
+              </span>
+              <h2 className="text-xl sm:text-2xl font-black text-slate-900 font-display">
+                {config.closedMessage || "શ્રી બ્રહ્માનંદ સત્સંગ યાત્રા - 2026 માટેનું ઓનલાઇન રજિસ્ટ્રેશન હાલ પૂર્ણ થયેલ છે."}
+              </h2>
+              <p className="text-xs sm:text-sm text-slate-600 max-w-md mx-auto leading-relaxed">
+                નવી નોંધણી અથવા વધુ પૂછપરછ માટે કૃપા કરીને નીચે આપેલા આયોજક નંબર પર સીધો સંપર્ક કરો.
+              </p>
+            </div>
+
+            {/* Organizer Contact Card */}
+            <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4 max-w-md mx-auto text-left flex items-center justify-between">
+              <div>
+                <p className="text-xs text-slate-500 font-medium">સંપર્ક / આયોજક:</p>
+                <p className="font-bold text-slate-900 text-sm sm:text-base">{config.paymentContactName || "અલ્પેશભાઈ વેગડ"}</p>
+                <p className="text-xs text-emerald-700 font-mono font-bold mt-0.5">+91 {config.paymentContactPhone || "76003 12101"}</p>
+              </div>
+              <a
+                href={`tel:${(config.paymentContactPhone || '76003 12101').replace(/[^0-9]/g, '')}`}
+                className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shadow-sm transition-all"
+              >
+                <PhoneCall className="w-4 h-4" />
+                <span>કૉલ કરો</span>
+              </a>
+            </div>
+          </div>
         ) : (
           <div>
             <form onSubmit={handleSubmit} noValidate className="space-y-5">
@@ -705,16 +747,9 @@ export default function App() {
 
       </main>
 
-      {/* Footer with organizer login */}
+      {/* Footer */}
       <footer className="max-w-2xl mx-auto px-4 mt-8 text-center text-xs text-slate-400">
         <p>© ૨૦૨૬ શ્રી બ્રહ્માનંદ સત્સંગ યાત્રા કમિટી</p>
-        <button
-          type="button"
-          onClick={() => setIsAdminOpen(true)}
-          className="mt-1 text-[11px] text-slate-400 hover:text-slate-600 underline cursor-pointer"
-        >
-          ઓર્ગેનાઈઝર લોગિન
-        </button>
       </footer>
 
       {/* Admin Dashboard Modal */}

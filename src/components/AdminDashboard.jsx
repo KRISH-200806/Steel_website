@@ -21,7 +21,8 @@ import {
   Cloud,
   ListOrdered,
   Wrench,
-  Sparkles
+  Sparkles,
+  Clock
 } from 'lucide-react';
 import {
   getStoredRegistrations,
@@ -32,7 +33,7 @@ import {
   testGoogleScriptConnection,
   repairCloudSequence
 } from '../services/submissionService';
-import { getActiveConfig, saveActiveConfig } from '../config/picnicConfig';
+import { DEFAULT_CONFIG, getActiveConfig, saveActiveConfig } from '../config/picnicConfig';
 
 export const AdminDashboard = ({ onClose }) => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -113,13 +114,12 @@ export const AdminDashboard = ({ onClose }) => {
   // Handle PIN Login
   const handleLogin = (e) => {
     e.preventDefault();
-    const currentConfig = getActiveConfig();
-    const expectedPin = currentConfig.adminPin || '2026';
-    if (pinInput.trim() === expectedPin || pinInput.trim() === 'admin123') {
+    const expectedPin = DEFAULT_CONFIG.adminPin || '1959';
+    if (pinInput.trim() === expectedPin) {
       setIsAuthenticated(true);
       setPinError('');
     } else {
-      setPinError('Incorrect PIN. Default PIN is 2026.');
+      setPinError('ખોટો PIN છે. કૃપા કરીને સાચો PIN દાખલ કરો.');
     }
   };
 
@@ -170,6 +170,20 @@ export const AdminDashboard = ({ onClose }) => {
     }
   };
 
+  // Calculate Fee for a single registration record
+  const calculateRowTotal = (r) => {
+    if (r.totalAmount !== undefined && r.totalAmount !== null && r.totalAmount !== '') {
+      return Number(r.totalAmount) || 0;
+    }
+    const isBus = (r.transportMode || '').includes('Bus');
+    const members = r.members || [];
+    const chargeable = r.chargeableCount !== undefined
+      ? Number(r.chargeableCount)
+      : members.filter(m => Number(m.age) > 5).length;
+    const perPerson = (config.feePerMember || 100) + (isBus ? (config.busFare || 200) : 0);
+    return chargeable * perPerson;
+  };
+
   // Metrics Calculation
   const totalRegistrations = registrations.length;
   const totalMembers = registrations.reduce((acc, r) => acc + (Number(r.totalMembers) || (r.members ? r.members.length : 1)), 0);
@@ -177,18 +191,15 @@ export const AdminDashboard = ({ onClose }) => {
   const vehicleCount = registrations.filter(r => (r.transportMode || '') === 'Own Vehicle').length;
   const busMemberCount = registrations.filter(r => (r.transportMode || '').includes('Bus')).reduce((acc, r) => acc + (Number(r.totalMembers) || (r.members ? r.members.length : 1)), 0);
 
-  const doneCount = registrations.filter(r => (r.paymentStatus || r.status) === 'Done').length;
-  const pendingCount = totalRegistrations - doneCount;
+  const doneRegistrations = registrations.filter(r => (r.paymentStatus || r.status) === 'Done');
+  const pendingRegistrations = registrations.filter(r => (r.paymentStatus || r.status) !== 'Done');
 
-  // Total Collection based on Age > 5
-  const totalCollectionAmount = registrations.reduce((acc, r) => {
-    if (r.totalAmount !== undefined) return acc + Number(r.totalAmount);
-    const isBus = (r.transportMode || '').includes('Bus');
-    const members = r.members || [];
-    const chargeable = members.filter(m => Number(m.age) > 5).length;
-    const perPerson = (config.feePerMember || 100) + (isBus ? (config.busFare || 200) : 0);
-    return acc + (chargeable * perPerson);
-  }, 0);
+  const doneCount = doneRegistrations.length;
+  const pendingCount = pendingRegistrations.length;
+
+  const totalCollectionAmount = registrations.reduce((acc, r) => acc + calculateRowTotal(r), 0);
+  const donePaymentAmount = doneRegistrations.reduce((acc, r) => acc + calculateRowTotal(r), 0);
+  const pendingPaymentAmount = pendingRegistrations.reduce((acc, r) => acc + calculateRowTotal(r), 0);
 
   // Filter logic
   const filteredRegistrations = registrations.filter(r => {
@@ -236,7 +247,7 @@ export const AdminDashboard = ({ onClose }) => {
             <div>
               <input
                 type="password"
-                placeholder="Enter PIN (Default: 2026)"
+                placeholder="Enter PIN"
                 value={pinInput}
                 onChange={(e) => setPinInput(e.target.value)}
                 className="w-full text-center text-lg font-mono tracking-widest px-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl focus:outline-none focus:ring-2 focus:ring-emerald-500/30 font-bold"
@@ -344,49 +355,93 @@ export const AdminDashboard = ({ onClose }) => {
         {activeTab === 'registrations' && (
           <div className="max-w-[1700px] mx-auto space-y-5">
 
-            {/* KPI Stats Cards */}
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
-              <div className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200/90 shadow-sm flex items-center gap-3.5">
-                <div className="w-11 h-11 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center flex-shrink-0">
-                  <Users className="w-6 h-6" />
+            {/* KPI Stats Cards (All 6 Cards) */}
+            <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3 sm:gap-4">
+
+              {/* 1. Total Groups */}
+              <div className="bg-white p-3.5 sm:p-4 rounded-2xl border border-slate-200/90 shadow-sm flex items-center gap-3 hover:shadow-md transition-shadow">
+                <div className="w-10 h-10 sm:w-11 sm:h-11 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center flex-shrink-0">
+                  <Users className="w-5 h-5 sm:w-6 sm:h-6" />
                 </div>
-                <div>
-                  <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Total Groups</p>
-                  <p className="text-2xl font-black text-slate-900">{totalRegistrations}</p>
+                <div className="min-w-0">
+                  <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider truncate">Total Groups</p>
+                  <p className="text-xl sm:text-2xl font-black text-slate-900">{totalRegistrations}</p>
                 </div>
               </div>
 
-              <div className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200/90 shadow-sm flex items-center gap-3.5">
-                <div className="w-11 h-11 rounded-xl bg-teal-100 text-teal-700 flex items-center justify-center flex-shrink-0">
-                  <Users className="w-6 h-6" />
+              {/* 2. Total Attendees */}
+              <div className="bg-white p-3.5 sm:p-4 rounded-2xl border border-slate-200/90 shadow-sm flex items-center gap-3 hover:shadow-md transition-shadow">
+                <div className="w-10 h-10 sm:w-11 sm:h-11 rounded-xl bg-teal-100 text-teal-700 flex items-center justify-center flex-shrink-0">
+                  <Users className="w-5 h-5 sm:w-6 sm:h-6" />
                 </div>
-                <div>
-                  <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Total Attendees</p>
-                  <p className="text-2xl font-black text-teal-700">{totalMembers} <span className="text-sm font-semibold text-slate-500">Members</span></p>
+                <div className="min-w-0">
+                  <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider truncate">Total Attendees</p>
+                  <p className="text-xl sm:text-2xl font-black text-teal-700 truncate">{totalMembers} <span className="text-xs font-semibold text-slate-500">Mbrs</span></p>
                 </div>
               </div>
 
-              <div className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200/90 shadow-sm flex items-center gap-3.5">
-                <div className="w-11 h-11 rounded-xl bg-emerald-100 text-emerald-800 flex items-center justify-center flex-shrink-0 font-mono font-bold text-xl">
+              {/* 3. Total Collection */}
+              <div className="bg-white p-3.5 sm:p-4 rounded-2xl border border-slate-200/90 shadow-sm flex items-center gap-3 hover:shadow-md transition-shadow">
+                <div className="w-10 h-10 sm:w-11 sm:h-11 rounded-xl bg-slate-900 text-emerald-400 flex items-center justify-center flex-shrink-0 font-mono font-bold text-lg sm:text-xl">
                   ₹
                 </div>
-                <div>
-                  <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Total Collection</p>
-                  <p className="text-2xl font-black text-emerald-700 font-mono">
+                <div className="min-w-0">
+                  <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider truncate">Total Collection</p>
+                  <p className="text-lg sm:text-2xl font-black text-slate-900 font-mono truncate">
                     ₹{totalCollectionAmount.toLocaleString('en-IN')}
                   </p>
                 </div>
               </div>
 
-              <div className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200/90 shadow-sm flex items-center gap-3.5">
-                <div className="w-11 h-11 rounded-xl bg-blue-100 text-blue-700 flex items-center justify-center flex-shrink-0">
-                  <Bus className="w-6 h-6" />
+              {/* 4. Done Payment (Added Card 1) */}
+              <div className="bg-white p-3.5 sm:p-4 rounded-2xl border border-emerald-200 shadow-sm flex items-center gap-3 bg-gradient-to-br from-white to-emerald-50/50 hover:shadow-md transition-shadow">
+                <div className="w-10 h-10 sm:w-11 sm:h-11 rounded-xl bg-emerald-500 text-white flex items-center justify-center flex-shrink-0 shadow-xs shadow-emerald-500/20">
+                  <CheckCircle className="w-5 h-5 sm:w-6 sm:h-6" />
                 </div>
-                <div>
-                  <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Bus (Jothan)</p>
-                  <p className="text-2xl font-black text-blue-700">{busCount} <span className="text-xs font-semibold text-slate-500">({busMemberCount} Seats)</span></p>
+                <div className="min-w-0">
+                  <div className="flex items-center gap-1">
+                    <p className="text-[11px] font-bold text-emerald-700 uppercase tracking-wider truncate">Done Payment</p>
+                    <span className="text-[9px] bg-emerald-100 text-emerald-800 font-bold px-1 rounded-full">જમા</span>
+                  </div>
+                  <p className="text-lg sm:text-2xl font-black text-emerald-700 font-mono truncate">
+                    ₹{donePaymentAmount.toLocaleString('en-IN')}
+                  </p>
+                  <p className="text-[11px] text-emerald-600/90 font-medium truncate">
+                    {doneCount} Groups Paid
+                  </p>
                 </div>
               </div>
+
+              {/* 5. Pending Payment (Added Card 2) */}
+              <div className="bg-white p-3.5 sm:p-4 rounded-2xl border border-amber-200 shadow-sm flex items-center gap-3 bg-gradient-to-br from-white to-amber-50/50 hover:shadow-md transition-shadow">
+                <div className="w-10 h-10 sm:w-11 sm:h-11 rounded-xl bg-amber-500 text-white flex items-center justify-center flex-shrink-0 shadow-xs shadow-amber-500/20">
+                  <Clock className="w-5 h-5 sm:w-6 sm:h-6" />
+                </div>
+                <div className="min-w-0">
+                  <div className="flex items-center gap-1">
+                    <p className="text-[11px] font-bold text-amber-700 uppercase tracking-wider truncate">Pending Payment</p>
+                    <span className="text-[9px] bg-amber-100 text-amber-800 font-bold px-1 rounded-full">બાકી</span>
+                  </div>
+                  <p className="text-lg sm:text-2xl font-black text-amber-700 font-mono truncate">
+                    ₹{pendingPaymentAmount.toLocaleString('en-IN')}
+                  </p>
+                  <p className="text-[11px] text-amber-600/90 font-medium truncate">
+                    {pendingCount} Groups Pending
+                  </p>
+                </div>
+              </div>
+
+              {/* 6. Bus (Jothan) */}
+              <div className="bg-white p-3.5 sm:p-4 rounded-2xl border border-slate-200/90 shadow-sm flex items-center gap-3 hover:shadow-md transition-shadow">
+                <div className="w-10 h-10 sm:w-11 sm:h-11 rounded-xl bg-blue-100 text-blue-700 flex items-center justify-center flex-shrink-0">
+                  <Bus className="w-5 h-5 sm:w-6 sm:h-6" />
+                </div>
+                <div className="min-w-0">
+                  <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider truncate">Bus (Jothan)</p>
+                  <p className="text-lg sm:text-2xl font-black text-blue-700 truncate">{busCount} <span className="text-xs font-semibold text-slate-500">({busMemberCount} Seats)</span></p>
+                </div>
+              </div>
+
             </div>
 
             {/* Filter & Export Toolbar */}
@@ -513,14 +568,14 @@ export const AdminDashboard = ({ onClose }) => {
                     <thead>
                       <tr className="bg-slate-50 border-b border-slate-200 text-slate-600 font-bold uppercase tracking-wider text-[11px]">
                         <th className="py-3.5 px-4">Reg ID</th>
-                        <th className="py-3.5 px-4">Date & Time</th>
+                        <th className="py-3.5 px-4 text-center">Payment Status</th>
                         <th className="py-3.5 px-4">Primary Contact</th>
                         <th className="py-3.5 px-4">Mobile</th>
                         <th className="py-3.5 px-4">Members</th>
                         <th className="py-3.5 px-4">Fee Breakdown</th>
                         <th className="py-3.5 px-4">Total Amount</th>
+                        <th className="py-3.5 px-4">Date & Time</th>
                         <th className="py-3.5 px-4">Travel Mode</th>
-                        <th className="py-3.5 px-4 text-center">Payment Status</th>
                         <th className="py-3.5 px-4 text-center">Actions</th>
                       </tr>
                     </thead>
@@ -552,27 +607,44 @@ export const AdminDashboard = ({ onClose }) => {
                           <React.Fragment key={row.registrationId}>
                             <tr className="hover:bg-slate-50/90 transition-colors">
 
-                              {/* Reg ID */}
+                              {/* 1. Reg ID */}
                               <td className="py-3.5 px-4 font-mono font-bold text-emerald-800">
                                 {row.registrationId}
                               </td>
 
-                              {/* Timestamp */}
-                              <td className="py-3.5 px-4 text-slate-500 whitespace-nowrap">
-                                {row.timestamp}
+                              {/* 2. Payment Status Interactive Selector */}
+                              <td className="py-3.5 px-4 text-center">
+                                <div className="inline-flex items-center justify-center gap-1.5">
+                                  <select
+                                    value={currentStatus}
+                                    onChange={(e) => handleStatusChange(row.registrationId, e.target.value)}
+                                    disabled={updatingStatusId === row.registrationId}
+                                    className={`px-2.5 py-1 rounded-xl font-bold text-[11px] cursor-pointer border transition-all focus:outline-none shadow-2xs ${isDone
+                                      ? 'bg-emerald-50 text-emerald-800 border-emerald-300 hover:bg-emerald-100'
+                                      : 'bg-amber-50 text-amber-900 border-amber-300 hover:bg-amber-100'
+                                      }`}
+                                    title="Click to change Payment Status"
+                                  >
+                                    <option value="Pending">⏳ Pending</option>
+                                    <option value="Done">✅ Done</option>
+                                  </select>
+                                  {updatingStatusId === row.registrationId && (
+                                    <Loader2 className="w-3.5 h-3.5 animate-spin text-emerald-600" />
+                                  )}
+                                </div>
                               </td>
 
-                              {/* Primary Contact Name */}
+                              {/* 3. Primary Contact Name */}
                               <td className="py-3.5 px-4 font-bold text-slate-900">
                                 {row.primaryName}
                               </td>
 
-                              {/* Mobile Number */}
+                              {/* 4. Mobile Number */}
                               <td className="py-3.5 px-4 font-mono font-semibold">
                                 +91 {row.mobileNumber}
                               </td>
 
-                              {/* Members Count with dropdown */}
+                              {/* 5. Members Count with dropdown */}
                               <td className="py-3.5 px-4">
                                 <button
                                   onClick={() => setExpandedRow(isExpanded ? null : row.registrationId)}
@@ -584,18 +656,23 @@ export const AdminDashboard = ({ onClose }) => {
                                 </button>
                               </td>
 
-                              {/* Fee Breakdown */}
+                              {/* 6. Fee Breakdown */}
                               <td className="py-3.5 px-4 text-[11px]">
                                 <span className="font-semibold text-emerald-800">{chargeable} Chg</span>
                                 {freeKids > 0 && <span className="text-teal-600 ml-1">({freeKids} Free)</span>}
                               </td>
 
-                              {/* Total Amount */}
+                              {/* 7. Total Amount */}
                               <td className="py-3.5 px-4 font-bold font-mono text-emerald-700">
                                 ₹{totalAmt.toLocaleString('en-IN')}
                               </td>
 
-                              {/* Transportation Mode */}
+                              {/* 8. Date & Time Timestamp */}
+                              <td className="py-3.5 px-4 text-slate-500 whitespace-nowrap font-medium text-[11px]">
+                                {row.timestamp}
+                              </td>
+
+                              {/* 9. Transportation Mode */}
                               <td className="py-3.5 px-4">
                                 {isBus ? (
                                   <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-blue-50 text-blue-800 border border-blue-200 font-bold text-[11px]">
@@ -610,30 +687,7 @@ export const AdminDashboard = ({ onClose }) => {
                                 )}
                               </td>
 
-                              {/* Payment Status Interactive Selector */}
-                              <td className="py-3.5 px-4 text-center">
-                                <div className="inline-flex items-center justify-center gap-1.5">
-                                  <select
-                                    value={currentStatus}
-                                    onChange={(e) => handleStatusChange(row.registrationId, e.target.value)}
-                                    disabled={updatingStatusId === row.registrationId}
-                                    className={`px-2.5 py-1 rounded-xl font-bold text-[11px] cursor-pointer border transition-all focus:outline-none shadow-2xs ${
-                                      isDone
-                                        ? 'bg-emerald-50 text-emerald-800 border-emerald-300 hover:bg-emerald-100'
-                                        : 'bg-amber-50 text-amber-900 border-amber-300 hover:bg-amber-100'
-                                    }`}
-                                    title="Click to change Payment Status"
-                                  >
-                                    <option value="Pending">⏳ Pending</option>
-                                    <option value="Done">✅ Done</option>
-                                  </select>
-                                  {updatingStatusId === row.registrationId && (
-                                    <Loader2 className="w-3.5 h-3.5 animate-spin text-emerald-600" />
-                                  )}
-                                </div>
-                              </td>
-
-                              {/* Quick Actions */}
+                              {/* 10. Quick Actions */}
                               <td className="py-3.5 px-4 text-center">
                                 <button
                                   onClick={() => setExpandedRow(isExpanded ? null : row.registrationId)}
@@ -703,23 +757,42 @@ export const AdminDashboard = ({ onClose }) => {
               <span>Event & Registration Settings</span>
             </h2>
             <p className="text-xs text-slate-500 mb-6">
-              Update Google Sheets sync, admin PIN, and event details.
+              Update Google Sheets sync and event details.
             </p>
 
             <form onSubmit={handleSaveSettings} className="space-y-5">
 
-              {/* Admin PIN */}
-              <div>
-                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
-                  Admin Portal PIN *
-                </label>
-                <input
-                  type="text"
-                  value={config.adminPin || '2026'}
-                  onChange={(e) => setConfig({ ...config, adminPin: e.target.value })}
-                  className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-mono font-bold text-slate-900"
-                />
-                <p className="text-[11px] text-slate-400 mt-1">PIN code to unlock this Organizer Portal.</p>
+              {/* Registration Portal Open/Close Switch */}
+              <div className={`p-4 rounded-2xl border transition-all flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 ${
+                config.isRegistrationOpen !== false
+                  ? 'bg-emerald-50/70 border-emerald-200'
+                  : 'bg-rose-50/70 border-rose-200'
+              }`}>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-base">{config.isRegistrationOpen !== false ? "🟢" : "🔴"}</span>
+                    <label className="block text-xs font-bold text-slate-900 uppercase tracking-wider">
+                      ઓનલાઇન રજિસ્ટ્રેશન ફોર્મ (Public Registration)
+                    </label>
+                  </div>
+                  <p className="text-[11px] text-slate-600 mt-1">
+                    {config.isRegistrationOpen !== false
+                      ? "ચાલુ છે: લોકો વેબસાઈટ પરથી રજિસ્ટ્રેશન ફોર્મ ભરી શકે છે."
+                      : "બંધ છે: લોકો ફોર્મ ભરી શકશે નહીં, તેમને 'રજિસ્ટ્રેશન પૂર્ણ થયેલ છે' મેસેજ દેખાશે."}
+                  </p>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => setConfig({ ...config, isRegistrationOpen: config.isRegistrationOpen === false ? true : false })}
+                  className={`px-4 py-2 rounded-xl text-xs font-bold transition-all shadow-xs flex-shrink-0 cursor-pointer ${
+                    config.isRegistrationOpen !== false
+                      ? 'bg-emerald-600 hover:bg-emerald-700 text-white'
+                      : 'bg-rose-600 hover:bg-rose-700 text-white'
+                  }`}
+                >
+                  {config.isRegistrationOpen !== false ? "✅ ફોર્મ ચાલુ છે (Open)" : "🛑 ફોર્મ બંધ છે (Closed)"}
+                </button>
               </div>
 
               {/* Google Apps Script Webhook URL */}
