@@ -30,7 +30,7 @@ export const DEFAULT_CONFIG = {
   idPrefix: "SBSY-2026-",
 
   // Registration Portal Status (Toggle Open / Closed)
-  isRegistrationOpen: true,
+  isRegistrationOpen: false,
   closedMessage: "શ્રી બ્રહ્માનંદ સત્સંગ યાત્રા - 2026 માટેનું ઓનલાઇન રજિસ્ટ્રેશન હાલ પૂર્ણ થયેલ છે.",
 
   // Admin PIN to access dashboard & configuration
